@@ -1,0 +1,546 @@
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from decimal import Decimal
+import uuid
+from PIL import Image
+import os
+
+# Custom User Model
+class CustomUser(AbstractUser):
+    USER_TYPES = (
+        ('artist', 'Artist'),
+        ('buyer', 'Buyer'),
+        ('admin', 'Admin'),
+    )
+    
+    user_type = models.CharField(max_length=10, choices=USER_TYPES, default='buyer')
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    is_verified = models.BooleanField(default=False)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.username} ({self.user_type})"
+
+ 
+
+# Artist Profile Model
+class ArtistProfile(models.Model):
+    SKILL_LEVELS = (
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('expert', 'Expert'),
+    )
+    
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='artist_profile')
+    bio = models.TextField(max_length=1000, blank=True)
+    skills = models.TextField(help_text="Comma-separated skills")
+    experience_level = models.CharField(max_length=20, choices=SKILL_LEVELS, default='beginner')
+    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    portfolio_description = models.TextField(max_length=2000, blank=True)
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
+    total_projects_completed = models.PositiveIntegerField(default=0)
+    total_earnings = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    is_available = models.BooleanField(default=True)
+    
+    def calculate_rating(self):
+        """Calculate average rating from reviews"""
+        reviews = self.reviews.all()
+        if reviews.exists():
+            avg_rating = reviews.aggregate(models.Avg('rating'))['rating__avg']
+            self.rating = round(avg_rating, 2)
+            self.save()
+        return self.rating
+    
+    def calculate_completion_rate(self):
+        """Calculate project completion rate"""
+        total_projects = self.hired_projects.count()
+        completed_projects = self.hired_projects.filter(status='completed').count()
+        if total_projects > 0:
+            return round((completed_projects / total_projects) * 100, 2)
+        return 0
+    
+    def __str__(self):
+        return f"{self.user.username} - Artist Profile"
+
+# Buyer Profile Model
+class BuyerProfile(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='buyer_profile')
+    company_name = models.CharField(max_length=100, blank=True)
+    address = models.TextField(max_length=500, blank=True)
+    total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    projects_posted = models.PositiveIntegerField(default=0)
+    
+    def calculate_total_spent(self):
+        """Calculate total amount spent by buyer"""
+        orders = self.user.buyer_orders.filter(status='completed')
+        payments = self.user.buyer_payments.filter(status='completed')
+        
+        order_total = orders.aggregate(
+            total=models.Sum('total_amount')
+        )['total'] or Decimal('0.00')
+        
+        payment_total = payments.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+        
+        self.total_spent = order_total + payment_total
+        self.save()
+        return self.total_spent
+    
+    def __str__(self):
+        return f"{self.user.username} - Buyer Profile"
+
+# Category Model
+class Category(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name_plural = "Categories"
+    
+    def __str__(self):
+        return self.name
+
+# Artwork Model
+class Artwork(models.Model):
+    ARTWORK_TYPES = (
+        ('digital', 'Digital Art'),
+        ('physical', 'Physical Art'),
+        ('mixed', 'Mixed Media'),
+    )
+    
+    artist = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='artworks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(max_length=2000)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
+    artwork_type = models.CharField(max_length=20, choices=ARTWORK_TYPES, default='digital')
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    image = models.ImageField(upload_to='artworks/')
+    watermarked_image = models.ImageField(upload_to='watermarked_artworks/', blank=True, null=True)
+    is_available = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    views_count = models.PositiveIntegerField(default=0)
+    likes_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def apply_watermark(self):
+        """Apply watermark to artwork image"""
+        # This is a placeholder for watermark functionality
+        # You would implement actual watermarking logic here
+        if self.image and not self.watermarked_image:
+            # Watermarking logic would go here
+            pass
+    
+    def increment_views(self):
+        """Increment view count"""
+        self.views_count += 1
+        self.save(update_fields=['views_count'])
+    
+    def __str__(self):
+        return f"{self.title} by {self.artist.username}"
+
+# Job/Project Model
+class Job(models.Model):
+    STATUS_CHOICES = (
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    )
+    
+    EXPERIENCE_LEVELS = (
+        ('entry', 'Entry Level'),
+        ('intermediate', 'Intermediate'),
+        ('expert', 'Expert'),
+    )
+    
+    buyer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='posted_jobs')
+    title = models.CharField(max_length=200)
+    description = models.TextField(max_length=3000)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
+    budget_min = models.DecimalField(max_digits=10, decimal_places=2)
+    budget_max = models.DecimalField(max_digits=10, decimal_places=2)
+    duration_days = models.PositiveIntegerField()
+    required_skills = models.TextField(help_text="Comma-separated required skills")
+    experience_level = models.CharField(max_length=20, choices=EXPERIENCE_LEVELS, default='entry')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    hired_artist = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='hired_projects'
+    )
+    final_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    deadline = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def calculate_average_bid(self):
+        """Calculate average bid amount for this job"""
+        bids = self.bids.all()
+        if bids.exists():
+            avg_bid = bids.aggregate(models.Avg('bid_amount'))['bid_amount__avg']
+            return round(avg_bid, 2)
+        return 0
+    
+    def get_total_bids(self):
+        """Get total number of bids"""
+        return self.bids.count()
+    
+    def is_deadline_approaching(self, days=3):
+        """Check if deadline is approaching within specified days"""
+        if self.deadline:
+            time_diff = self.deadline - timezone.now()
+            return time_diff.days <= days
+        return False
+    
+    def __str__(self):
+        return f"{self.title} - {self.buyer.username}"
+
+# Bid Model
+class Bid(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
+    
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='bids')
+    artist = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='my_bids')
+    bid_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_time = models.PositiveIntegerField(help_text="Delivery time in days")
+    cover_letter = models.TextField(max_length=1500)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['job', 'artist']
+    
+    def calculate_bid_rank(self):
+        """Calculate rank of this bid among all bids for the job"""
+        all_bids = self.job.bids.order_by('bid_amount')
+        for index, bid in enumerate(all_bids, 1):
+            if bid.id == self.id:
+                return index
+        return 0
+    
+    def __str__(self):
+        return f"Bid by {self.artist.username} for {self.job.title}"
+
+# Equipment Model
+class Equipment(models.Model):
+    EQUIPMENT_TYPES = (
+        ('frame', 'Frame'),
+        ('paint', 'Paint'),
+        ('brush', 'Brush'),
+        ('canvas', 'Canvas'),
+        ('other', 'Other'),
+    )
+    
+    name = models.CharField(max_length=100)
+    description = models.TextField(max_length=500, blank=True)
+    equipment_type = models.CharField(max_length=20, choices=EQUIPMENT_TYPES)
+    price = models.DecimalField(max_digits=8, decimal_places=2)
+    stock_quantity = models.PositiveIntegerField(default=0)
+    image = models.ImageField(upload_to='equipment/', blank=True, null=True)
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def is_in_stock(self):
+        """Check if equipment is in stock"""
+        return self.stock_quantity > 0
+    
+    def reduce_stock(self, quantity):
+        """Reduce stock quantity"""
+        if self.stock_quantity >= quantity:
+            self.stock_quantity -= quantity
+            self.save()
+            return True
+        return False
+    
+    def __str__(self):
+        return f"{self.name} - ${self.price}"
+
+# Order Model
+class Order(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+    )
+    
+    ORDER_TYPES = (
+        ('artwork', 'Artwork Purchase'),
+        ('equipment', 'Equipment Purchase'),
+    )
+    
+    buyer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='buyer_orders')
+    order_type = models.CharField(max_length=20, choices=ORDER_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    shipping_address = models.TextField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def calculate_total(self):
+        """Calculate total order amount"""
+        artwork_total = self.artwork_items.aggregate(
+            total=models.Sum(models.F('quantity') * models.F('price'))
+        )['total'] or Decimal('0.00')
+        
+        equipment_total = self.equipment_items.aggregate(
+            total=models.Sum(models.F('quantity') * models.F('price'))
+        )['total'] or Decimal('0.00')
+        
+        self.total_amount = artwork_total + equipment_total
+        self.save()
+        return self.total_amount
+    
+    def __str__(self):
+        return f"Order #{self.id} by {self.buyer.username}"
+
+# Order Item Models
+class ArtworkOrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='artwork_items')
+    artwork = models.ForeignKey(Artwork, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    def save(self, *args, **kwargs):
+        if not self.price:
+            self.price = self.artwork.price
+        super().save(*args, **kwargs)
+    
+    def get_total_price(self):
+        return self.quantity * self.price
+
+class EquipmentOrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='equipment_items')
+    equipment = models.ForeignKey(Equipment, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    def save(self, *args, **kwargs):
+        if not self.price:
+            self.price = self.equipment.price
+        super().save(*args, **kwargs)
+    
+    def get_total_price(self):
+        return self.quantity * self.price
+
+# Payment Model
+class Payment(models.Model):
+    PAYMENT_METHODS = (
+        ('jazzcash', 'JazzCash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('cash_on_delivery', 'Cash on Delivery'),
+    )
+    
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    )
+    
+    payer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='buyer_payments')
+    payee = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.CASCADE, 
+        related_name='artist_payments',
+        blank=True, 
+        null=True
+    )
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True)
+    job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=100, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.transaction_id:
+            self.transaction_id = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+    
+    def calculate_platform_fee(self, fee_percentage=5):
+        """Calculate platform fee"""
+        return (self.amount * Decimal(fee_percentage)) / Decimal(100)
+    
+    def calculate_artist_earning(self, fee_percentage=5):
+        """Calculate artist earning after platform fee"""
+        return self.amount - self.calculate_platform_fee(fee_percentage)
+    
+    def __str__(self):
+        return f"Payment #{self.transaction_id} - ${self.amount}"
+
+# Message Model
+class Message(models.Model):
+    sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='sent_messages')
+    receiver = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='received_messages')
+    job = models.ForeignKey(Job, on_delete=models.SET_NULL, null=True, blank=True)
+    content = models.TextField(max_length=2000)
+    attachment = models.FileField(upload_to='message_attachments/', blank=True, null=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def mark_as_read(self):
+        """Mark message as read"""
+        self.is_read = True
+        self.save(update_fields=['is_read'])
+    
+    def __str__(self):
+        return f"Message from {self.sender.username} to {self.receiver.username}"
+
+# Review Model
+class Review(models.Model):
+    reviewer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='given_reviews')
+    artist = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='reviews')
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='reviews')
+    rating = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['reviewer', 'job']
+    
+    def __str__(self):
+        return f"Review for {self.artist.username} - {self.rating} stars"
+
+# Contract Model
+class Contract(models.Model):
+    STATUS_CHOICES = (
+        ('draft', 'Draft'),
+        ('pending', 'Pending Approval'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('terminated', 'Terminated'),
+    )
+    
+    RIGHTS_CHOICES = (
+        ('display_only', 'Display Only'),
+        ('reproduction', 'Reproduction Rights'),
+        ('commercial', 'Commercial Use'),
+        ('exclusive', 'Exclusive Rights'),
+    )
+    
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name='contract')
+    artist = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='artist_contracts')
+    buyer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='buyer_contracts')
+    terms = models.TextField(max_length=5000)
+    rights_type = models.CharField(max_length=20, choices=RIGHTS_CHOICES, default='display_only')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    deadline = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    artist_signed = models.BooleanField(default=False)
+    buyer_signed = models.BooleanField(default=False)
+    artist_signed_at = models.DateTimeField(null=True, blank=True)
+    buyer_signed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def is_fully_signed(self):
+        """Check if contract is signed by both parties"""
+        return self.artist_signed and self.buyer_signed
+    
+    def sign_by_artist(self):
+        """Sign contract by artist"""
+        self.artist_signed = True
+        self.artist_signed_at = timezone.now()
+        if self.buyer_signed:
+            self.status = 'active'
+        self.save()
+    
+    def sign_by_buyer(self):
+        """Sign contract by buyer"""
+        self.buyer_signed = True
+        self.buyer_signed_at = timezone.now()
+        if self.artist_signed:
+            self.status = 'active'
+        self.save()
+    
+    def __str__(self):
+        return f"Contract for {self.job.title}"
+
+# Notification Model
+class Notification(models.Model):
+    NOTIFICATION_TYPES = (
+        ('new_bid', 'New Bid'),
+        ('bid_accepted', 'Bid Accepted'),
+        ('job_completed', 'Job Completed'),
+        ('payment_received', 'Payment Received'),
+        ('new_message', 'New Message'),
+        ('contract_signed', 'Contract Signed'),
+    )
+    
+    recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField(max_length=500)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def mark_as_read(self):
+        """Mark notification as read"""
+        self.is_read = True
+        self.save(update_fields=['is_read'])
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Notification for {self.recipient.username}: {self.title}"
+
+# Analytics Model for Admin Dashboard
+class PlatformAnalytics(models.Model):
+    date = models.DateField(auto_now_add=True)
+    total_users = models.PositiveIntegerField(default=0)
+    total_artists = models.PositiveIntegerField(default=0)
+    total_buyers = models.PositiveIntegerField(default=0)
+    total_jobs_posted = models.PositiveIntegerField(default=0)
+    total_jobs_completed = models.PositiveIntegerField(default=0)
+    total_artworks_uploaded = models.PositiveIntegerField(default=0)
+    total_revenue = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    total_platform_fees = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    
+    def calculate_daily_stats(self):
+        """Calculate daily statistics"""
+        # Users
+        self.total_users = CustomUser.objects.count()
+        self.total_artists = CustomUser.objects.filter(user_type='artist').count()
+        self.total_buyers = CustomUser.objects.filter(user_type='buyer').count()
+        
+        # Jobs
+        self.total_jobs_posted = Job.objects.count()
+        self.total_jobs_completed = Job.objects.filter(status='completed').count()
+        
+        # Artworks
+        self.total_artworks_uploaded = Artwork.objects.count()
+        
+        # Revenue
+        completed_payments = Payment.objects.filter(status='completed')
+        self.total_revenue = completed_payments.aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0.00')
+        
+        # Platform fees (assuming 5% fee)
+        self.total_platform_fees = self.total_revenue * Decimal('0.05')
+        
+        self.save()
+    
+    class Meta:
+        unique_together = ['date']
+        ordering = ['-date']
+    
+    def __str__(self):
+        return f"Analytics for {self.date}"
