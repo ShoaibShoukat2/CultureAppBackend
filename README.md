@@ -17,10 +17,11 @@ https://yourdomain.com/api/users/
 **Endpoint:**
 
 ```html
-<pre>
-  <code id="signup-endpoint">POST /api/users/signup/</code>
+<p>
+  <code id="signup-endpoint">POST /api/signup/</code>
   <button onclick="navigator.clipboard.writeText(document.getElementById('signup-endpoint').innerText)">📋 Copy</button>
-</pre>
+</p>
+
 ```
 
 Registers a new user.
@@ -68,10 +69,12 @@ Registers a new user.
 **Endpoint:**
 
 ```html
-<pre>
-  <code id="signin-endpoint">POST /api/users/signin/</code>
+<p>
+  <code id="signin-endpoint">POST /api/signin/</code>
   <button onclick="navigator.clipboard.writeText(document.getElementById('signin-endpoint').innerText)">📋 Copy</button>
-</pre>
+</p>
+
+
 ```
 
 Authenticates a user using their username and password.
