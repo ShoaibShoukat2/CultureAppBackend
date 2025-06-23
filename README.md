@@ -1,4 +1,4 @@
-# 🎨 Artify API – User Authentication (Signup & Signin)
+# 🎨 CultureApp API – User Authentication (Signup & Signin)
 
 This project provides user authentication APIs using **Django** and **Django REST Framework**, supporting user types like `artist`, `buyer`, and `admin`.
 
