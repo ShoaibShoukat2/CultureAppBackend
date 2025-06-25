@@ -5,6 +5,8 @@ from .models import CustomUser
 
 
 
+from rest_framework.authtoken.models import Token
+
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
 
@@ -27,9 +29,9 @@ class SignupSerializer(serializers.ModelSerializer):
             phone_number=validated_data.get('phone_number'),
             profile_image=validated_data.get('profile_image')
         )
+        # Create token for the new user
+        Token.objects.create(user=user)
         return user
-
-
 
 
 
@@ -40,27 +42,26 @@ class SignupSerializer(serializers.ModelSerializer):
 class SigninSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-
+    
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
 
-        # Try to find the user by email
         user = CustomUser.objects.filter(email=email).first()
         if not user:
             raise serializers.ValidationError({"email": "No user found with this email."})
-
-        # Check password
         if not user.check_password(password):
             raise serializers.ValidationError({"password": "Incorrect password."})
-
-        # Check if account is active
         if not user.is_active:
             raise serializers.ValidationError({"account": "User account is disabled."})
 
-        return user
+        # Get or create token
+        token, created = Token.objects.get_or_create(user=user)
+        return {
+            "token": token.key,
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+        }
     
-
-
-
 
