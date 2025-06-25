@@ -7,14 +7,16 @@ from django.contrib.auth import login
 from rest_framework.permissions import AllowAny
 
 class SignupView(APIView):
-    permission_classes = [AllowAny]
-
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
+            response_serializer = SignupSerializer(user)  # serialize the created user
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
 
 
 class SigninView(APIView):
