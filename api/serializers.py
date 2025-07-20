@@ -1,11 +1,9 @@
 # users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import CustomUser
-
-
-
+from .models import *
 from rest_framework.authtoken.models import Token
+
 
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
@@ -35,10 +33,6 @@ class SignupSerializer(serializers.ModelSerializer):
 
 
 
-
-
-
-
 class SigninSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -63,5 +57,37 @@ class SigninSerializer(serializers.Serializer):
             "username": user.username,
             "email": user.email,
         }
+
+
+
+
+
+class ArtistProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    completion_rate = serializers.SerializerMethodField()
     
+    class Meta:
+        model = ArtistProfile
+        fields = [
+            'id',
+            'username',
+            'bio',
+            'skills',
+            'experience_level',
+            'hourly_rate',
+            'portfolio_description',
+            'rating',
+            'total_projects_completed',
+            'total_earnings',
+            'is_available',
+            'completion_rate',
+        ]
+        read_only_fields = ['rating', 'total_projects_completed', 'total_earnings', 'completion_rate']
+
+    def get_completion_rate(self, obj):
+        return obj.calculate_completion_rate()
+
+
+
+
 

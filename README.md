@@ -1,137 +1,104 @@
-# 🎨 CultureApp API – User Authentication (Signup & Signin)
+# 🎨 User Authentication & Artist Profile API - Django REST Framework
 
-This project provides user authentication APIs using **Django** and **Django REST Framework**, supporting user types like `artist`, `buyer`, and `admin`.
-
----
-
-## 📍 Base URL
-
-```
-https://yourdomain.com/api/users/
-```
+This project provides a RESTful API for user authentication (sign up/sign in) and managing artist profiles. It uses Django, Django REST Framework, and Token Authentication.
 
 ---
 
-## 🔐 Signup API
+## 📦 Features
 
-**Endpoint:**
+- User registration (Sign up)
+- User login (Sign in) with token generation
+- Token-based authentication
+- Artist profile creation and listing
+- Profile metrics like completion rate, total earnings, etc.
 
-```html
-<p>
-  <code id="signup-endpoint">POST /api/signup/</code>
-  <button onclick="navigator.clipboard.writeText(document.getElementById('signup-endpoint').innerText)">📋 Copy</button>
-</p>
+---
 
-```
+## 🚀 API Endpoints
 
-Registers a new user.
+All endpoints are prefixed with: `/api/`
 
-### 📥 Request Fields
+### 🔐 Authentication
 
-| Field           | Type   | Required | Description                                                       |
-|-----------------|--------|----------|-------------------------------------------------------------------|
-| `username`      | string | ✅ Yes   | Unique username                                                   |
-| `email`         | string | ✅ Yes   | Valid email address                                               |
-| `password`      | string | ✅ Yes   | Minimum 6 characters (write-only)                                 |
-| `user_type`     | string | ❌ No    | Options: `artist`, `buyer`, or `admin` (default: `buyer`)         |
-| `phone_number`  | string | ❌ No    | Optional phone number                                             |
-| `profile_image` | file   | ❌ No    | Optional profile image (multipart/form-data)                      |
-
-### 🧪 Sample JSON Request
-
+#### ▶️ Sign Up (User Registration)
+**URL**: `/api/signup/`  
+**Method**: `POST`  
+**Body Parameters** (JSON):
 ```json
 {
-  "username": "johndoe",
-  "email": "johndoe@example.com",
-  "password": "securepass123",
+  "username": "john_doe",
+  "email": "john@example.com",
+  "password": "securePassword123",
   "user_type": "artist",
-  "phone_number": "03001234567"
+  "phone_number": "1234567890",
+  "profile_image": "http://example.com/image.jpg"
 }
 ```
 
-### ✅ Sample JSON Response
-
+**Response**:
 ```json
 {
   "id": 1,
-  "username": "johndoe",
-  "email": "johndoe@example.com",
+  "username": "john_doe",
+  "email": "john@example.com",
   "user_type": "artist",
-  "phone_number": "03001234567",
-  "profile_image": null
+  "phone_number": "1234567890",
+  "profile_image": "http://example.com/image.jpg"
 }
 ```
 
 ---
 
-## 🔑 Signin API
-
-**Endpoint:**
-
-```html
-<p>
-  <code id="signin-endpoint">POST /api/signin/</code>
-  <button onclick="navigator.clipboard.writeText(document.getElementById('signin-endpoint').innerText)">📋 Copy</button>
-</p>
-
-
-```
-
-Authenticates a user using their username and password.
-
-### 📥 Request Fields
-
-| Field      | Type   | Required | Description                |
-|------------|--------|----------|----------------------------|
-| `username` | string | ✅ Yes   | Registered username        |
-| `password` | string | ✅ Yes   | User password (write-only) |
-
-### 🧪 Sample JSON Request
-
+#### ▶️ Sign In (User Login)
+**URL**: `/api/signin/`  
+**Method**: `POST`  
+**Body Parameters** (JSON):
 ```json
 {
-  "username": "johndoe",
-  "password": "securepass123"
+  "email": "john@example.com",
+  "password": "securePassword123"
 }
 ```
 
-### ✅ Sample JSON Response
-
+**Response**:
 ```json
 {
-  "message": "Login successful",
   "token": "your-auth-token",
-  "user": {
-    "id": 1,
-    "username": "johndoe",
-    "email": "johndoe@example.com",
-    "user_type": "artist"
-  }
-}
-```
-
-### ❌ Error Responses
-
-**Invalid credentials:**
-
-```json
-{
-  "non_field_errors": ["Invalid username or password."]
-}
-```
-
-**Disabled user:**
-
-```json
-{
-  "non_field_errors": ["User account is disabled."]
+  "user_id": 1,
+  "username": "john_doe",
+  "email": "john@example.com"
 }
 ```
 
 ---
 
-> 💡 **Note:** The copy buttons will only work on platforms that support HTML inside Markdown like GitHub (partial support) or custom docs websites (fully supported).  
-> On GitHub, you may consider using custom documentation tools (like [Docusaurus](https://docusaurus.io/), [MkDocs](https://www.mkdocs.org/), or Swagger UI) for full interactivity.
+## 🎨 Artist Profile
 
+> All Artist Profile APIs require **Token Authentication** via `Authorization: Token <your-token>` header.
 
+#### ▶️ Get Artist Profile List / Detail
+**URL**: `/api/artist-profiles/`  
+**Method**: `GET`
+
+**Response**:
+```json
+[
+  {
+    "id": 1,
+    "username": "john_doe",
+    "bio": "Digital painter and concept artist.",
+    "skills": "Photoshop, Illustrator, Sketch",
+    "experience_level": "expert",
+    "hourly_rate": "25.00",
+    "portfolio_description": "Worked with multiple gaming studios.",
+    "rating": 4.9,
+    "total_projects_completed": 35,
+    "total_earnings": "5000.00",
+    "is_available": true,
+    "completion_rate": 95.0
+  }
+]
+```
+
+---
 

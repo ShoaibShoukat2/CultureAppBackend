@@ -66,6 +66,13 @@ class ArtistProfile(models.Model):
     def __str__(self):
         return f"{self.user.username} - Artist Profile"
 
+
+
+
+
+
+
+
 # Buyer Profile Model
 class BuyerProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='buyer_profile')
