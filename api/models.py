@@ -551,3 +551,9 @@ class PlatformAnalytics(models.Model):
     
     def __str__(self):
         return f"Analytics for {self.date}"
+    
+    
+
+
+
+
