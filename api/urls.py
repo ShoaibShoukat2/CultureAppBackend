@@ -44,6 +44,10 @@ urlpatterns = [
          ArtistProfileViewSet.as_view({'get': 'artworks'}), 
          name='artist-artworks'),
     
+
+    
+    
+    
     # ===== Artwork Custom Actions =====
     path('artworks/<int:pk>/like/', 
          ArtworkViewSet.as_view({'post': 'like'}), 
@@ -112,7 +116,6 @@ urlpatterns = [
     
     path('', include(router.urls)),
 ]
-
 
 
 
@@ -247,3 +250,5 @@ SEARCH:
 DASHBOARD:
 - GET    /api/dashboard/stats/
 """
+
+
