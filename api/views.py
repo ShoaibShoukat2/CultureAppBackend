@@ -37,6 +37,8 @@ def register(request):
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -645,15 +647,16 @@ class PlatformAnalyticsViewSet(ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 # Dashboard Views
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     """Get dashboard statistics for current user"""
     user = request.user
     stats = {}
-    
+
     if user.user_type == 'artist':
-        artist_profile = user.artist_profile
+        artist_profile, _ = ArtistProfile.objects.get_or_create(user=user)
         stats = {
             'total_projects': artist_profile.total_projects_completed,
             'total_earnings': artist_profile.total_earnings,
@@ -661,22 +664,23 @@ def dashboard_stats(request):
             'active_bids': user.my_bids.filter(status='pending').count(),
             'ongoing_projects': user.hired_projects.filter(status='in_progress').count(),
             'total_artworks': user.artworks.filter(is_available=True).count(),
-            'recent_reviews': user.reviews.order_by('-created_at')[:5]
+            'recent_reviews': list(
+                user.reviews.order_by('-created_at')[:5].values('rating', 'comment', 'created_at')
+            ),
         }
-    
+
     elif user.user_type == 'buyer':
-        buyer_profile = user.buyer_profile
+        buyer_profile, _ = BuyerProfile.objects.get_or_create(user=user)
         stats = {
             'total_spent': buyer_profile.total_spent,
             'projects_posted': buyer_profile.projects_posted,
             'active_jobs': user.posted_jobs.filter(status='open').count(),
             'ongoing_projects': user.posted_jobs.filter(status='in_progress').count(),
             'total_orders': user.buyer_orders.count(),
-            'pending_payments': user.buyer_payments.filter(status='pending').count()
+            'pending_payments': user.buyer_payments.filter(status='pending').count(),
         }
-    
+
     elif user.user_type == 'admin':
-        # Admin stats
         stats = {
             'total_users': CustomUser.objects.count(),
             'total_artists': CustomUser.objects.filter(user_type='artist').count(),
@@ -684,12 +688,15 @@ def dashboard_stats(request):
             'active_jobs': Job.objects.filter(status='open').count(),
             'completed_jobs': Job.objects.filter(status='completed').count(),
             'total_revenue': Payment.objects.filter(status='completed').aggregate(
-                total=Sum('amount'))['total'] or 0,
-            'recent_registrations': CustomUser.objects.order_by('-created_at')[:10]
+                total=Sum('amount')
+            )['total'] or 0,
+            'recent_registrations': list(
+                CustomUser.objects.order_by('-created_at')[:10]
+                .values('id', 'username', 'email', 'user_type', 'created_at')
+            ),
         }
-    
-    return Response(stats)
 
+    return Response(stats)
 # Search Views
 @api_view(['GET'])
 @permission_classes([AllowAny])
