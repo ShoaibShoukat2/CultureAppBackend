@@ -549,6 +549,8 @@ class ReviewViewSet(ModelViewSet):
         
         # Update artist rating
         review.artist.artist_profile.calculate_rating()
+        
+        
 
 # Contract Views
 class ContractViewSet(ModelViewSet):
