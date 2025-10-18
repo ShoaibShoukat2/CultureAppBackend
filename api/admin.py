@@ -7,19 +7,19 @@ from .models import (
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'user_type', 'is_verified', 'is_staff', 'created_at')
+    list_display = ('id','username', 'email', 'user_type', 'is_verified', 'is_staff', 'created_at')
     list_filter = ('user_type', 'is_verified', 'is_staff', 'is_superuser')
     search_fields = ('username', 'email', 'phone_number')
 
 @admin.register(ArtistProfile)
 class ArtistProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'experience_level', 'hourly_rate', 'rating', 'total_projects_completed', 'is_available')
+    list_display = ('id','user', 'experience_level', 'hourly_rate', 'rating', 'total_projects_completed', 'is_available')
     search_fields = ('user__username', 'skills')
     list_filter = ('experience_level', 'is_available')
 
 @admin.register(BuyerProfile)
 class BuyerProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'company_name', 'total_spent', 'projects_posted')
+    list_display = ('id','user', 'company_name', 'total_spent', 'projects_posted')
     search_fields = ('user__username', 'company_name')
 
 @admin.register(Category)
@@ -112,4 +112,8 @@ class PlatformAnalyticsAdmin(admin.ModelAdmin):
 admin.site.site_header = "ArtConnect Admin"
 admin.site.site_title = "ArtConnect Portal"
 admin.site.index_title = "Welcome to ArtConnect Admin"
+
+
+
+
 

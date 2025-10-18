@@ -48,7 +48,7 @@ class ArtistProfile(models.Model):
     
     def calculate_rating(self):
         """Calculate average rating from reviews"""
-        reviews = self.reviews.all()
+        reviews = self.user.reviews.all()
         if reviews.exists():
             avg_rating = reviews.aggregate(models.Avg('rating'))['rating__avg']
             self.rating = round(avg_rating, 2)
@@ -57,11 +57,12 @@ class ArtistProfile(models.Model):
     
     def calculate_completion_rate(self):
         """Calculate project completion rate"""
-        total_projects = self.hired_projects.count()
-        completed_projects = self.hired_projects.filter(status='completed').count()
+        total_projects = self.user.hired_projects.count()
+        completed_projects = self.user.hired_projects.filter(status='completed').count()
         if total_projects > 0:
             return round((completed_projects / total_projects) * 100, 2)
         return 0
+
     
     def __str__(self):
         return f"{self.user.username} - Artist Profile"
@@ -241,6 +242,12 @@ class Bid(models.Model):
     
     def __str__(self):
         return f"Bid by {self.artist.username} for {self.job.title}"
+    
+    
+
+    
+
+    
 
 # Equipment Model
 class Equipment(models.Model):
@@ -275,6 +282,10 @@ class Equipment(models.Model):
     
     def __str__(self):
         return f"{self.name} - ${self.price}"
+    
+    
+    
+    
 
 # Order Model
 class Order(models.Model):

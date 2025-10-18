@@ -49,6 +49,9 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError('User account is disabled')
             attrs['user'] = user
         return attrs
+    
+
+    
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -57,6 +60,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
                  'user_type', 'phone_number', 'is_verified', 'profile_image',
                  'created_at']
         read_only_fields = ['id', 'username', 'user_type', 'is_verified', 'created_at']
+        
+
+        
+        
+        
 
 # Artist Profile Serializers
 class ArtistProfileSerializer(serializers.ModelSerializer):
@@ -74,13 +82,21 @@ class ArtistProfileSerializer(serializers.ModelSerializer):
         return obj.calculate_completion_rate()
     
     def get_total_reviews(self, obj):
-        return obj.reviews.count()
+        """Count all reviews received by this artist."""
+        return Review.objects.filter(job__hired_artist=obj.user).count()
+
+        
+
+
 
 class ArtistProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ArtistProfile
         fields = ['bio', 'skills', 'experience_level', 'hourly_rate',
                  'portfolio_description', 'is_available']
+        
+
+        
 
 # Buyer Profile Serializers
 class BuyerProfileSerializer(serializers.ModelSerializer):
@@ -89,11 +105,15 @@ class BuyerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = BuyerProfile
         fields = ['user', 'company_name', 'address', 'total_spent', 'projects_posted']
+        
 
 class BuyerProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = BuyerProfile
         fields = ['company_name', 'address']
+        
+
+
 
 # Category Serializers
 class CategorySerializer(serializers.ModelSerializer):
@@ -111,6 +131,9 @@ class CategorySerializer(serializers.ModelSerializer):
     def get_jobs_count(self, obj):
         return obj.job_set.filter(status='open').count()
 
+
+
+
 # Artwork Serializers
 class ArtworkSerializer(serializers.ModelSerializer):
     artist = UserProfileSerializer(read_only=True)
@@ -127,6 +150,8 @@ class ArtworkSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['artist'] = self.context['request'].user
         return super().create(validated_data)
+  
+    
 
 class ArtworkListSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.username', read_only=True)
@@ -168,6 +193,8 @@ class JobSerializer(serializers.ModelSerializer):
     
     def get_deadline_approaching(self, obj):
         return obj.is_deadline_approaching()
+
+
 
 class JobListSerializer(serializers.ModelSerializer):
     buyer_name = serializers.CharField(source='buyer.username', read_only=True)
@@ -223,6 +250,9 @@ class EquipmentSerializer(serializers.ModelSerializer):
     
     def get_in_stock(self, obj):
         return obj.is_in_stock()
+    
+    
+
 
 # Order Serializers
 class ArtworkOrderItemSerializer(serializers.ModelSerializer):
@@ -416,6 +446,7 @@ class PlatformAnalyticsSerializer(serializers.ModelSerializer):
         
         
         
+
 
 
 

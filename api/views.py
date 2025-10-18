@@ -54,6 +54,10 @@ def login(request):
         }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
@@ -63,6 +67,11 @@ def logout(request):
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
     except:
         return Response({'error': 'Error logging out'}, status=status.HTTP_400_BAD_REQUEST)
+   
+   
+  
+
+    
 
 # User Profile Views
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -73,10 +82,13 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+
+    
+
 # Artist Profile Views
 class ArtistProfileViewSet(ModelViewSet):
     """Artist profile CRUD operations"""
-    queryset = ArtistProfile.objects.select_related('user').prefetch_related('reviews')
+    queryset = ArtistProfile.objects.select_related('user').prefetch_related('user__reviews')
     serializer_class = ArtistProfileSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     pagination_class = StandardResultsSetPagination
@@ -85,6 +97,8 @@ class ArtistProfileViewSet(ModelViewSet):
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'skills']
     ordering_fields = ['rating', 'total_projects_completed', 'hourly_rate']
     ordering = ['-rating']
+
+
     
     def get_serializer_class(self):
         if self.action in ['update', 'partial_update']:
@@ -120,6 +134,10 @@ class ArtistProfileViewSet(ModelViewSet):
         serializer = ArtworkListSerializer(artworks, many=True)
         return Response(serializer.data)
 
+
+
+
+
 # Buyer Profile Views
 class BuyerProfileViewSet(ModelViewSet):
     """Buyer profile CRUD operations"""
@@ -143,6 +161,12 @@ class CategoryViewSet(ReadOnlyModelViewSet):
     queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
+  
+ 
+    
+
+  
+    
 
 # Artwork Views
 class ArtworkViewSet(ModelViewSet):
@@ -174,6 +198,8 @@ class ArtworkViewSet(ModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
+    
+    
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
         """Like/unlike artwork"""
@@ -193,6 +219,9 @@ class ArtworkViewSet(ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = ArtworkListSerializer(featured_artworks, many=True)
         return Response(serializer.data)
+    
+
+    
 
 # Job Views
 class JobViewSet(ModelViewSet):
@@ -268,6 +297,8 @@ class JobViewSet(ModelViewSet):
         except Bid.DoesNotExist:
             return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
     
+    
+    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete_job(self, request, pk=None):
         """Complete a job"""
@@ -294,6 +325,7 @@ class JobViewSet(ModelViewSet):
         buyer_profile.calculate_total_spent()
         
         return Response({'message': 'Job completed successfully'})
+
 
 # Bid Views
 class BidViewSet(ModelViewSet):
@@ -341,6 +373,12 @@ class BidViewSet(ModelViewSet):
         
         serializer.save()
 
+
+
+        
+        
+        
+
 # Equipment Views
 class EquipmentViewSet(ModelViewSet):
     """Equipment CRUD operations"""
@@ -369,6 +407,9 @@ class EquipmentViewSet(ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(in_stock_equipment, many=True)
         return Response(serializer.data)
+    
+    
+    
 
 # Order Views
 class OrderViewSet(ModelViewSet):
@@ -465,6 +506,9 @@ class PaymentViewSet(ModelViewSet):
             
             return Response({'message': 'Payment processed successfully'})
         return Response({'error': 'Payment cannot be processed'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
 
 # Message Views
 class MessageViewSet(ModelViewSet):
