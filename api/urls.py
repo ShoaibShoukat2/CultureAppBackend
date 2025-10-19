@@ -44,6 +44,7 @@ urlpatterns = [
          ArtistProfileViewSet.as_view({'get': 'artworks'}), 
          name='artist-artworks'),
     
+    
 
     
     

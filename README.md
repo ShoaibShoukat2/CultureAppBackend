@@ -283,8 +283,22 @@ Authorization: Token YOUR_TOKEN
     "is_available": false
 }
 ```
+**Request Body (PATCH - full update):**
+
+```json
+{
+    "bio": "Experienced digital artist specializing in portraits.",
+    "skills": "Digital Painting, Concept Art, Illustration",
+    "experience_level": "Intermediate",
+    "hourly_rate": "200.00",
+    "portfolio_description": "Over 100 commissioned artworks completed.",
+    "is_available": true
+}
+
+```
 
 ---
+
 
 ### 5. Get Artist Reviews
 **Endpoint:** `GET /api/artist-profiles/{id}/reviews/`
