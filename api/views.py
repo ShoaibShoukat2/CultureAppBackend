@@ -83,6 +83,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+
     
 
 # Artist Profile Views
