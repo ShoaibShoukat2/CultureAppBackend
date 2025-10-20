@@ -40,9 +40,8 @@ urlpatterns = [
     path('artist-profiles/<int:pk>/reviews/', 
          ArtistProfileViewSet.as_view({'get': 'reviews'}), 
          name='artist-reviews'),
-    path('artist-profiles/<int:pk>/artworks/', 
-         ArtistProfileViewSet.as_view({'get': 'artworks'}), 
-         name='artist-artworks'),
+    path('artist-profiles/<int:user_id>/artworks/', ArtworkViewSet.as_view({'get': 'list'}), name='artist-artworks'),
+
     
 
 

@@ -184,6 +184,23 @@ class ArtworkViewSet(ModelViewSet):
     ordering_fields = ['price', 'created_at', 'views_count', 'likes_count']
     ordering = ['-created_at']
     
+    
+    def list(self, request, *args, **kwargs):
+        user_id = self.kwargs.get('user_id')
+        if user_id:
+            queryset = self.queryset.filter(artist__id=user_id)
+        else:
+            queryset = self.queryset
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    
+    
+    
     def get_serializer_class(self):
         if self.action == 'list':
             return ArtworkListSerializer
