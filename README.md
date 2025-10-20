@@ -312,6 +312,68 @@ Authorization: Token YOUR_TOKEN
 
 **Example:** `GET /api/artist-profiles/1/artworks/`
 
+```json
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 12,
+      "artist": {
+        "id": 1,
+        "username": "john_doe",
+        "email": "john@example.com"
+      },
+      "title": "Dreamscape",
+      "description": "A surreal digital painting exploring abstract imagination.",
+      "category": {
+        "id": 2,
+        "name": "Digital Art"
+      },
+      "artwork_type": "digital",
+      "price": "250.00",
+      "image": "http://127.0.0.1:8000/media/artworks/dreamscape.jpg",
+      "watermarked_image": null,
+      "is_available": true,
+      "is_featured": true,
+      "views_count": 145,
+      "likes_count": 30,
+      "created_at": "2025-10-16T12:00:00Z",
+      "updated_at": "2025-10-18T18:45:00Z"
+    },
+    {
+      "id": 13,
+      "artist": {
+        "id": 1,
+        "username": "john_doe",
+        "email": "john@example.com"
+      },
+      "title": "Serenity",
+      "description": "A minimalistic landscape inspired by nature’s calmness.",
+      "category": {
+        "id": 3,
+        "name": "Nature"
+      },
+      "artwork_type": "physical",
+      "price": "480.00",
+      "image": "http://127.0.0.1:8000/media/artworks/serenity.jpg",
+      "watermarked_image": null,
+      "is_available": true,
+      "is_featured": false,
+      "views_count": 92,
+      "likes_count": 20,
+      "created_at": "2025-10-18T15:10:00Z",
+      "updated_at": "2025-10-19T09:00:00Z"
+    }
+  ]
+}
+
+
+```
+
+
+
 ---
 
 ## 🛍️ Buyer Profiles
