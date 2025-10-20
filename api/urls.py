@@ -45,10 +45,7 @@ urlpatterns = [
          name='artist-artworks'),
     
 
-    
 
-    
-    
     
     # ===== Artwork Custom Actions =====
     path('artworks/<int:pk>/like/', 

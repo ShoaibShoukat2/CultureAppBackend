@@ -46,6 +46,8 @@ class ArtistProfile(models.Model):
     total_earnings = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     is_available = models.BooleanField(default=True)
     
+    
+    
     def calculate_rating(self):
         """Calculate average rating from reviews"""
         reviews = self.user.reviews.all()

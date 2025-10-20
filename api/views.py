@@ -98,6 +98,8 @@ class ArtistProfileViewSet(ModelViewSet):
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'skills']
     ordering_fields = ['rating', 'total_projects_completed', 'hourly_rate']
     ordering = ['-rating']
+    
+    lookup_field = 'user_id'
 
 
     
