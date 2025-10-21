@@ -161,6 +161,11 @@ class ArtworkListSerializer(serializers.ModelSerializer):
         model = Artwork
         fields = ['id', 'title', 'artist_name', 'category_name', 'artwork_type',
                  'price', 'image', 'is_featured', 'views_count', 'likes_count', 'created_at']
+       
+       
+       
+     
+        
 
 # Job/Project Serializers
 class JobSerializer(serializers.ModelSerializer):

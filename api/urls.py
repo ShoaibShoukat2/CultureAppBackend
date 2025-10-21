@@ -6,6 +6,7 @@ from .views import *
 # Create router and register viewsets
 router = DefaultRouter()
 
+
 # Register all viewsets
 router.register(r'artist-profiles', ArtistProfileViewSet, basename='artist-profile')
 router.register(r'buyer-profiles', BuyerProfileViewSet, basename='buyer-profile')
