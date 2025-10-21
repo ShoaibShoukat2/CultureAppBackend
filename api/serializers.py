@@ -76,7 +76,7 @@ class ArtistProfileSerializer(serializers.ModelSerializer):
         model = ArtistProfile
         fields = ['user', 'bio', 'skills', 'experience_level', 'hourly_rate',
                  'portfolio_description', 'rating', 'total_projects_completed',
-                 'total_earnings', 'is_available', 'completion_rate', 'total_reviews']
+                 'total_earnings', 'is_available', 'completion_rate', 'total_reviews','profile_image']
     
     def get_completion_rate(self, obj):
         return obj.calculate_completion_rate()
@@ -95,6 +95,7 @@ class ArtistProfileUpdateSerializer(serializers.ModelSerializer):
         fields = ['bio', 'skills', 'experience_level', 'hourly_rate',
                  'portfolio_description', 'is_available']
         
+
 
         
 
