@@ -102,6 +102,7 @@ class ArtistProfileViewSet(ModelViewSet):
     lookup_field = 'user_id'
 
 
+
     
     def get_serializer_class(self):
         if self.action in ['update', 'partial_update']:

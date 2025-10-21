@@ -307,199 +307,12 @@ Authorization: Token YOUR_TOKEN
 
 ---
 
-## **1. List All Artworks**
-**Endpoint:** `GET /api/artworks/`  
+### 6. Get Artist Artworks
+**Endpoint:** `GET /api/artist-profiles/{id}/artworks/`
 
-**Query Parameters (Optional):**  
-- `is_featured=true` → Get only featured artworks  
-- `category_id=<id>` → Filter by category  
-
-**Response Example:**
+**Example:** `GET /api/artist-profiles/1/artworks/`
 
 ```json
-{
-  "count": 2,
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 12,
-      "artist": {
-        "id": 1,
-        "username": "john_doe",
-        "email": "john@example.com"
-      },
-      "title": "Dreamscape",
-      "description": "A surreal digital painting exploring abstract imagination.",
-      "category": {
-        "id": 2,
-        "name": "Digital Art"
-      },
-      "artwork_type": "digital",
-      "price": "250.00",
-      "image": "http://127.0.0.1:8000/media/artworks/dreamscape.jpg",
-      "watermarked_image": null,
-      "is_available": true,
-      "is_featured": true,
-      "views_count": 145,
-      "likes_count": 30,
-      "created_at": "2025-10-16T12:00:00Z",
-      "updated_at": "2025-10-18T18:45:00Z"
-    }
-  ]
-}
-2. Retrieve Artwork Details
-Endpoint: GET /api/artworks/{id}/
-
-Example: GET /api/artworks/12/
-
-Response Example:
-
-json
-Copy code
-{
-  "id": 12,
-  "artist": {
-    "id": 1,
-    "username": "john_doe",
-    "email": "john@example.com"
-  },
-  "title": "Dreamscape",
-  "description": "A surreal digital painting exploring abstract imagination.",
-  "category": {
-    "id": 2,
-    "name": "Digital Art"
-  },
-  "artwork_type": "digital",
-  "price": "250.00",
-  "image": "http://127.0.0.1:8000/media/artworks/dreamscape.jpg",
-  "watermarked_image": null,
-  "is_available": true,
-  "is_featured": true,
-  "views_count": 145,
-  "likes_count": 30,
-  "created_at": "2025-10-16T12:00:00Z",
-  "updated_at": "2025-10-18T18:45:00Z"
-}
-3. Create Artwork
-Endpoint: POST /api/artworks/
-
-Headers:
-
-h
-Copy code
-Authorization: Bearer <your_token>
-Content-Type: multipart/form-data
-Payload (Form Data):
-
-Field	Type	Required	Notes
-title	string	✅	Artwork title
-description	string	❌	Description of artwork
-category_id	integer	❌	Existing category ID
-artwork_type	string	❌	digital, physical, mixed
-price	decimal	✅	Price of artwork
-image	file	✅	Artwork image
-is_available	boolean	❌	Default true
-is_featured	boolean	❌	Default false
-
-Example cURL Request:
-
-bash
-Copy code
-curl -X POST http://127.0.0.1:8000/api/artworks/ \
--H "Authorization: Bearer <your_token>" \
--F "title=Sunset Vibes" \
--F "description=A vibrant sunset painting." \
--F "category_id=3" \
--F "artwork_type=digital" \
--F "price=200.00" \
--F "image=@/path/to/image.jpg" \
--F "is_available=true" \
--F "is_featured=false"
-Response Example:
-
-json
-Copy code
-{
-  "id": 14,
-  "artist": {
-    "id": 2,
-    "username": "newuser",
-    "email": "newuser@example.com"
-  },
-  "title": "Sunset Vibes",
-  "description": "A vibrant sunset painting.",
-  "category": {
-    "id": 3,
-    "name": "Nature"
-  },
-  "artwork_type": "digital",
-  "price": "200.00",
-  "image": "http://127.0.0.1:8000/media/artworks/sunset.jpg",
-  "watermarked_image": null,
-  "is_available": true,
-  "is_featured": false,
-  "views_count": 0,
-  "likes_count": 0,
-  "created_at": "2025-10-21T20:25:00Z",
-  "updated_at": "2025-10-21T20:25:00Z"
-}
-4. Update Artwork
-Endpoint: PUT /api/artworks/{id}/ (Full update)
-Endpoint: PATCH /api/artworks/{id}/ (Partial update)
-
-Payload Example (Partial):
-
-json
-Copy code
-{
-  "title": "Sunset Vibes Updated",
-  "price": "220.00",
-  "is_featured": true
-}
-Response Example:
-
-json
-Copy code
-{
-  "id": 14,
-  "artist": {
-    "id": 2,
-    "username": "newuser",
-    "email": "newuser@example.com"
-  },
-  "title": "Sunset Vibes Updated",
-  "description": "A vibrant sunset painting.",
-  "category": {
-    "id": 3,
-    "name": "Nature"
-  },
-  "artwork_type": "digital",
-  "price": "220.00",
-  "image": "http://127.0.0.1:8000/media/artworks/sunset.jpg",
-  "watermarked_image": null,
-  "is_available": true,
-  "is_featured": true,
-  "views_count": 0,
-  "likes_count": 0,
-  "created_at": "2025-10-21T20:25:00Z",
-  "updated_at": "2025-10-21T20:30:00Z"
-}
-5. Delete Artwork
-Endpoint: DELETE /api/artworks/{id}/
-
-Response:
-Status 204 No Content on success.
-
-6. Get Artist Artworks
-Endpoint: GET /api/artist-profiles/{id}/artworks/
-
-Example: GET /api/artist-profiles/1/artworks/
-
-Response Example:
-
-json
-Copy code
 {
   "count": 2,
   "next": null,
@@ -555,6 +368,11 @@ Copy code
     }
   ]
 }
+
+
+```
+
+
 
 ---
 
