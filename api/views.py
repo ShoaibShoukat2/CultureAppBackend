@@ -141,7 +141,6 @@ class ArtistProfileViewSet(ModelViewSet):
 
 
 
-
 # Buyer Profile Views
 class BuyerProfileViewSet(ModelViewSet):
     """Buyer profile CRUD operations"""

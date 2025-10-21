@@ -76,7 +76,7 @@ class ArtistProfileSerializer(serializers.ModelSerializer):
         model = ArtistProfile
         fields = ['user', 'bio', 'skills', 'experience_level', 'hourly_rate',
                  'portfolio_description', 'rating', 'total_projects_completed',
-                 'total_earnings', 'is_available', 'completion_rate', 'total_reviews','profile_image']
+                 'total_earnings', 'is_available', 'completion_rate', 'total_reviews']
     
     def get_completion_rate(self, obj):
         return obj.calculate_completion_rate()
@@ -90,11 +90,37 @@ class ArtistProfileSerializer(serializers.ModelSerializer):
 
 
 class ArtistProfileUpdateSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(source='user.profile_image', required=False)
+
     class Meta:
         model = ArtistProfile
-        fields = ['bio', 'skills', 'experience_level', 'hourly_rate',
-                 'portfolio_description', 'is_available']
-        
+        fields = [
+            'bio',
+            'skills',
+            'experience_level',
+            'hourly_rate',
+            'portfolio_description',
+            'is_available',
+            'profile_image',
+        ]
+
+    def update(self, instance, validated_data):
+        # Handle nested user data for profile image
+        user_data = validated_data.pop('user', {})
+        profile_image = user_data.get('profile_image', None)
+
+        # Update artist profile fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update user profile image if provided
+        if profile_image:
+            instance.user.profile_image = profile_image
+            instance.user.save()
+
+        return instance
+
 
 
         
