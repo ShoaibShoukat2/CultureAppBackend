@@ -93,7 +93,7 @@ class ArtistProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ArtistProfile
         fields = ['bio', 'skills', 'experience_level', 'hourly_rate',
-                 'portfolio_description', 'is_available','profile_image']
+                 'portfolio_description', 'is_available']
         
 
         
