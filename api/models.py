@@ -145,52 +145,99 @@ class Artwork(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-
-
+    
+    
+    
     def apply_watermark(self):
-        """Apply watermark text on the artwork image"""
-        if self.image and not self.watermarked_image:
-            try:
-                # Open the original image
-                original_image = Image.open(self.image)
-                watermark_text = "© Shoaib Arts"  # ← yahan apna brand name likho
+        """
+        Apply a bold, tiled, diagonal text watermark across the whole image
+        so the watermark is clearly visible over the entire picture.
+        """
+        if not (self.image and (not self.watermarked_image)):
+            return
 
-                # Convert to RGBA (to allow transparency)
-                if original_image.mode != "RGBA":
-                    original_image = original_image.convert("RGBA")
+        try:
+            original = Image.open(self.image).convert("RGBA")
+            txt = "© CultureUp"  # <- change text if you want
 
-                # Create transparent layer for watermark
-                watermark_layer = Image.new("RGBA", original_image.size, (255, 255, 255, 0))
-                draw = ImageDraw.Draw(watermark_layer)
-
-                # Font setup (you can use custom font path if you want)
+            # pick a truetype bold font if available (preferred)
+            font_size = max(30, int(original.width * 0.12))  # ~12% of image width
+            font = None
+            for fpath in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "arial.ttf"):
+                try:
+                    font = ImageFont.truetype(fpath, font_size)
+                    break
+                except Exception:
+                    font = None
+            if font is None:
+                # fallback (may be small, but will still work)
                 font = ImageFont.load_default()
 
-                # Position watermark (bottom-right corner)
-                text_width, text_height = draw.textsize(watermark_text, font)
-                x = original_image.width - text_width - 20
-                y = original_image.height - text_height - 20
+            # create a single watermark image (text) and rotate it
+            # first determine text size
+            dummy = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+            dummydraw = ImageDraw.Draw(dummy)
+            text_w, text_h = dummydraw.textsize(txt, font=font)
 
-                # Draw text (white with light transparency)
-                draw.text((x, y), watermark_text, fill=(255, 255, 255, 128), font=font)
+            padding = int(font_size * 0.4)
+            text_img = Image.new("RGBA", (text_w + padding * 2, text_h + padding * 2), (0, 0, 0, 0))
+            text_draw = ImageDraw.Draw(text_img)
 
-                # Merge both layers
-                watermarked_image = Image.alpha_composite(original_image, watermark_layer)
-                watermarked_image = watermarked_image.convert("RGB")
+            # draw text with stroke for better visibility
+            # stroke_width works on Pillow >= 5.2; fallback draws shadow
+            fill_color = (255, 255, 255, 200)   # white with high opacity
+            stroke_color = (0, 0, 0, 200)       # black stroke for contrast
+            try:
+                text_draw.text((padding, padding), txt, font=font,
+                            fill=fill_color, stroke_width=2, stroke_fill=stroke_color)
+            except TypeError:
+                # older Pillow: draw shadow then text
+                text_draw.text((padding+2, padding+2), txt, font=font, fill=stroke_color)
+                text_draw.text((padding, padding), txt, font=font, fill=fill_color)
 
-                # Save to memory
-                temp = BytesIO()
-                watermarked_image.save(temp, format='JPEG')
-                temp.seek(0)
+            # rotate watermark text image (diagonal)
+            angle = -30
+            rotated = text_img.rotate(angle, expand=1)
 
-                # Save into model field
-                file_name = f"watermarked_{self.image.name.split('/')[-1]}"
-                self.watermarked_image.save(file_name, ContentFile(temp.read()), save=False)
+            # create layer to tile watermark
+            layer = Image.new("RGBA", original.size, (0, 0, 0, 0))
 
-            except Exception as e:
-                print("Watermarking failed:", e)
+            # tile the rotated watermark across the layer
+            rw, rh = rotated.size
+            step_x = int(rw * 0.9)  # overlap a bit so it's continuous
+            step_y = int(rh * 0.9)
+            # start offsets to center pattern
+            start_x = -rw
+            start_y = -rh
 
-        
+            for x in range(start_x, original.width + rw, step_x):
+                for y in range(start_y, original.height + rh, step_y):
+                    layer.paste(rotated, (x, y), rotated)
+
+            # optionally dim the watermark layer overall (if too strong)
+            # to make it uniformly semi-transparent multiply alpha
+            # choose alpha_factor between 0 (invisible) and 1 (full)
+            alpha_factor = 1.0  # 1.0 = full as drawn (we already used high alpha); reduce if too strong
+            if alpha_factor < 1.0:
+                # apply alpha multiplication
+                alpha = layer.split()[3].point(lambda p: int(p * alpha_factor))
+                layer.putalpha(alpha)
+
+            # composite the watermark layer on top of original
+            combined = Image.alpha_composite(original, layer).convert("RGB")
+
+            # save to memory and to model field
+            temp = BytesIO()
+            combined.save(temp, format='JPEG', quality=90)
+            temp.seek(0)
+            file_name = f"watermarked_{self.image.name.split('/')[-1]}"
+            self.watermarked_image.save(file_name, ContentFile(temp.read()), save=False)
+
+        except Exception as e:
+            # for debugging you can log the exception
+            print("Watermarking failed:", e)
+
+
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.image and not self.watermarked_image:

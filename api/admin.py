@@ -42,7 +42,9 @@ class ArtworkAdmin(admin.ModelAdmin):
         if obj.image:
             obj.apply_watermark()
             obj.save(update_fields=['watermarked_image'])
-        
+
+
+
             
 
 @admin.register(Job)
