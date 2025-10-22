@@ -116,6 +116,11 @@ class Category(models.Model):
     
     def __str__(self):
         return self.name
+    
+    
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+from django.core.files.base import ContentFile
 
 # Artwork Model
 class Artwork(models.Model):
@@ -140,13 +145,59 @@ class Artwork(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+
+
     def apply_watermark(self):
-        """Apply watermark to artwork image"""
-        # This is a placeholder for watermark functionality
-        # You would implement actual watermarking logic here
+        """Apply watermark text on the artwork image"""
         if self.image and not self.watermarked_image:
-            # Watermarking logic would go here
-            pass
+            try:
+                # Open the original image
+                original_image = Image.open(self.image)
+                watermark_text = "© Shoaib Arts"  # ← yahan apna brand name likho
+
+                # Convert to RGBA (to allow transparency)
+                if original_image.mode != "RGBA":
+                    original_image = original_image.convert("RGBA")
+
+                # Create transparent layer for watermark
+                watermark_layer = Image.new("RGBA", original_image.size, (255, 255, 255, 0))
+                draw = ImageDraw.Draw(watermark_layer)
+
+                # Font setup (you can use custom font path if you want)
+                font = ImageFont.load_default()
+
+                # Position watermark (bottom-right corner)
+                text_width, text_height = draw.textsize(watermark_text, font)
+                x = original_image.width - text_width - 20
+                y = original_image.height - text_height - 20
+
+                # Draw text (white with light transparency)
+                draw.text((x, y), watermark_text, fill=(255, 255, 255, 128), font=font)
+
+                # Merge both layers
+                watermarked_image = Image.alpha_composite(original_image, watermark_layer)
+                watermarked_image = watermarked_image.convert("RGB")
+
+                # Save to memory
+                temp = BytesIO()
+                watermarked_image.save(temp, format='JPEG')
+                temp.seek(0)
+
+                # Save into model field
+                file_name = f"watermarked_{self.image.name.split('/')[-1]}"
+                self.watermarked_image.save(file_name, ContentFile(temp.read()), save=False)
+
+            except Exception as e:
+                print("Watermarking failed:", e)
+
+        
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.image and not self.watermarked_image:
+            self.apply_watermark()
+            super().save(update_fields=['watermarked_image'])
+
+        
     
     def increment_views(self):
         """Increment view count"""
