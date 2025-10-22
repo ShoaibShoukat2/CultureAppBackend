@@ -33,6 +33,17 @@ class ArtworkAdmin(admin.ModelAdmin):
     list_display = ('title', 'artist', 'artwork_type', 'category', 'price', 'is_available', 'is_featured', 'views_count')
     list_filter = ('artwork_type', 'is_available', 'is_featured', 'category')
     search_fields = ('title', 'artist__username', 'description')
+    
+    
+    def save_model(self, request, obj, form, change):
+        # pehle normal save
+        super().save_model(request, obj, form, change)
+        # apply watermark after image is fully uploaded
+        if obj.image:
+            obj.apply_watermark()
+            obj.save(update_fields=['watermarked_image'])
+        
+            
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
