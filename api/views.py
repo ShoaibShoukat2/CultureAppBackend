@@ -141,12 +141,13 @@ class ArtistProfileViewSet(ModelViewSet):
 
 
 
-# Buyer Profile Views
 class BuyerProfileViewSet(ModelViewSet):
     """Buyer profile CRUD operations"""
     queryset = BuyerProfile.objects.select_related('user')
     serializer_class = BuyerProfileSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
+    lookup_field = 'user_id'
+
     
     def get_serializer_class(self):
         if self.action in ['update', 'partial_update']:

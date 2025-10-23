@@ -23,6 +23,8 @@ router.register(r'contracts', ContractViewSet, basename='contract')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'analytics', PlatformAnalyticsViewSet, basename='analytics')
 
+
+
 # URL patterns
 urlpatterns = [
     # ===== Authentication URLs =====
