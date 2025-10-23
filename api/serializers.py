@@ -134,10 +134,32 @@ class BuyerProfileSerializer(serializers.ModelSerializer):
         fields = ['user', 'company_name', 'address', 'total_spent', 'projects_posted']
         
 
+
 class BuyerProfileUpdateSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(source='user.profile_image', required=False)
+
     class Meta:
         model = BuyerProfile
-        fields = ['company_name', 'address']
+        fields = ['company_name', 'address', 'profile_image']
+
+    def update(self, instance, validated_data):
+        # Extract nested user data (for profile image)
+        user_data = validated_data.pop('user', {})
+        profile_image = user_data.get('profile_image', None)
+
+        # Update BuyerProfile fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update user's profile image if provided
+        if profile_image:
+            instance.user.profile_image = profile_image
+            instance.user.save()
+
+        return instance
+
+
         
 
 
