@@ -181,3 +181,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://ShoaibAhmad.pythonanywhere.com",
 ]
+
+
+import os
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')

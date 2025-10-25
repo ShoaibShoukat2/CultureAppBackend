@@ -480,8 +480,14 @@ class OrderViewSet(ModelViewSet):
         return Response({'error': 'Order cannot be cancelled'}, status=status.HTTP_400_BAD_REQUEST)
 
 # Payment Views
+import stripe
+from django.conf import settings
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
 class PaymentViewSet(ModelViewSet):
-    """Payment CRUD operations"""
+    """Payment CRUD operations with Stripe integration"""
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
@@ -489,44 +495,91 @@ class PaymentViewSet(ModelViewSet):
     filterset_fields = ['payment_method', 'status']
     ordering_fields = ['created_at', 'amount']
     ordering = ['-created_at']
-    
+
     def get_queryset(self):
         """Filter payments by current user"""
         user = self.request.user
         return Payment.objects.filter(
             Q(payer=user) | Q(payee=user)
         ).select_related('payer', 'payee', 'order', 'job')
-    
+
     def get_serializer_class(self):
         if self.action == 'create':
             return PaymentCreateSerializer
         return PaymentSerializer
-    
+
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
-        """Process a payment"""
+        """Process a payment using Stripe"""
         payment = self.get_object()
         if payment.payer != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-        
-        if payment.status == 'pending':
-            # Here you would integrate with actual payment gateway
-            payment.status = 'completed'
+
+        if payment.status != 'pending':
+            return Response({'error': 'Payment already processed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Create Stripe PaymentIntent
+            intent = stripe.PaymentIntent.create(
+                amount=int(payment.amount * 100),  # Stripe works in cents
+                currency="usd",
+                payment_method_types=["card"],
+                metadata={
+                    "payment_id": payment.id,
+                    "payer_id": payment.payer.id,
+                    "payee_id": payment.payee.id if payment.payee else None
+                }
+            )
+
+            payment.stripe_payment_intent = intent['id']
+            payment.status = 'processing'
             payment.save()
-            
-            # Update related records
-            if payment.order:
-                payment.order.status = 'confirmed'
-                payment.order.save()
-            
-            if payment.job and payment.payee:
-                # Update artist earnings
-                artist_profile = payment.payee.artist_profile
-                artist_profile.total_earnings += payment.calculate_artist_earning()
-                artist_profile.save()
-            
-            return Response({'message': 'Payment processed successfully'})
-        return Response({'error': 'Payment cannot be processed'}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                'client_secret': intent['client_secret'],
+                'message': 'Stripe PaymentIntent created successfully'
+            }, status=status.HTTP_200_OK)
+
+        except stripe.error.StripeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def confirm_stripe_payment(self, request):
+        """Confirm payment after client completes card payment"""
+        payment_intent_id = request.data.get('payment_intent_id')
+        if not payment_intent_id:
+            return Response({'error': 'Payment Intent ID required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+            # If succeeded, mark payment as completed
+            if intent['status'] == 'succeeded':
+                payment = Payment.objects.get(stripe_payment_intent=payment_intent_id)
+                payment.status = 'completed'
+                payment.save()
+
+                # Update related order/job
+                if payment.order:
+                    payment.order.status = 'confirmed'
+                    payment.order.save()
+
+                if payment.job and payment.payee:
+                    artist_profile = payment.payee.artist_profile
+                    artist_profile.total_earnings += payment.calculate_artist_earning()
+                    artist_profile.save()
+
+                return Response({'message': 'Payment confirmed successfully'})
+
+            return Response({'status': intent['status']})
+
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment record not found'}, status=status.HTTP_404_NOT_FOUND)
+        except stripe.error.StripeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+ 
+   
+    
     
     
     

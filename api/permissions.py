@@ -190,6 +190,7 @@ class IsBuyerProfile(permissions.BasePermission):
             obj.user == request.user and 
             request.user.user_type == 'buyer'
         )
+        
 
 
 class CanBidOnJob(permissions.BasePermission):
