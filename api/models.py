@@ -462,6 +462,8 @@ class Payment(models.Model):
         ('jazzcash', 'JazzCash'),
         ('bank_transfer', 'Bank Transfer'),
         ('cash_on_delivery', 'Cash on Delivery'),
+        ('stripe', 'Stripe'),
+        
     )
     
     STATUS_CHOICES = (
