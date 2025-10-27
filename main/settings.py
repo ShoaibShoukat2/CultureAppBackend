@@ -12,6 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
+
+
+
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -183,6 +190,5 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 
-import os
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
