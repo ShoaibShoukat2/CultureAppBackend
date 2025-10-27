@@ -455,6 +455,13 @@ class EquipmentOrderItem(models.Model):
     
     def get_total_price(self):
         return self.quantity * self.price
+   
+
+
+
+    
+    
+    
 
 # Payment Model
 class Payment(models.Model):

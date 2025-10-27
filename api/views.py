@@ -486,6 +486,8 @@ from django.conf import settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+
+
 class PaymentViewSet(ModelViewSet):
     """Payment CRUD operations with Stripe integration"""
     serializer_class = PaymentSerializer
@@ -580,6 +582,22 @@ class PaymentViewSet(ModelViewSet):
  
    
     
+    
+    
+    
+     # ✅ ADD THIS METHOD
+    def create(self, request, *args, **kwargs):
+        """Create payment record and return full details (with transaction_id)"""
+        create_serializer = PaymentCreateSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        create_serializer.is_valid(raise_exception=True)
+        payment = create_serializer.save()  # payer auto-set here
+
+        # Return full details (including transaction_id, platform fee, etc.)
+        full_serializer = PaymentSerializer(payment, context={'request': request})
+        return Response(full_serializer.data, status=status.HTTP_201_CREATED)
     
     
     
