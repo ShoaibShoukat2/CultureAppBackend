@@ -15,6 +15,16 @@ from .models import *
 from .serializers import *
 from .permissions import IsOwnerOrReadOnly, IsArtistOrReadOnly, IsBuyerOrReadOnly
 
+
+# Payment Views
+import stripe
+from django.conf import settings
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+
+
 # Custom Pagination
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -479,12 +489,6 @@ class OrderViewSet(ModelViewSet):
             return Response({'message': 'Order cancelled successfully'})
         return Response({'error': 'Order cannot be cancelled'}, status=status.HTTP_400_BAD_REQUEST)
 
-# Payment Views
-import stripe
-from django.conf import settings
-
-stripe.api_key = settings.STRIPE_SECRET_KEY
-
 
 
 
@@ -599,7 +603,7 @@ class PaymentViewSet(ModelViewSet):
         full_serializer = PaymentSerializer(payment, context={'request': request})
         return Response(full_serializer.data, status=status.HTTP_201_CREATED)
     
-    
+
     
 
 # Message Views
