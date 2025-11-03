@@ -24,7 +24,6 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 
-
 # Custom Pagination
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
@@ -391,19 +390,17 @@ class BidViewSet(ModelViewSet):
         return [IsAuthenticated()]
     
     def perform_create(self, serializer):
-        """Create bid with additional validations"""
-        job = serializer.validated_data['job']
-        
+        job = serializer.validated_data['job']  # now safe, always present
+
         # Check if job is still open
         if job.status != 'open':
             raise serializers.ValidationError("Job is no longer open for bidding")
-        
+
         # Check if artist already bid
         if Bid.objects.filter(job=job, artist=self.request.user).exists():
             raise serializers.ValidationError("You have already bid on this job")
-        
-        serializer.save()
 
+        serializer.save(artist=self.request.user)
 
 
         

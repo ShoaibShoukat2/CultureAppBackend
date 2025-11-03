@@ -182,7 +182,6 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 
-
 # Artwork Serializers
 class ArtworkSerializer(serializers.ModelSerializer):
     artist = UserProfileSerializer(read_only=True)
@@ -264,25 +263,33 @@ class JobListSerializer(serializers.ModelSerializer):
     def get_total_bids(self, obj):
         return obj.get_total_bids()
 
-# Bid Serializers
+
+
 class BidSerializer(serializers.ModelSerializer):
     artist = UserProfileSerializer(read_only=True)
     job = JobListSerializer(read_only=True)
-    job_id = serializers.IntegerField(write_only=True)
+    job_id = serializers.PrimaryKeyRelatedField(
+        queryset=Job.objects.all(),
+        source='job',  # connects job_id → job object
+        write_only=True
+    )
     bid_rank = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Bid
-        fields = ['id', 'job', 'job_id', 'artist', 'bid_amount', 'delivery_time',
-                 'cover_letter', 'status', 'created_at', 'bid_rank']
+        fields = [
+            'id', 'job', 'job_id', 'artist', 'bid_amount', 'delivery_time',
+            'cover_letter', 'status', 'created_at', 'bid_rank'
+        ]
         read_only_fields = ['artist', 'status', 'bid_rank']
-    
+
     def create(self, validated_data):
         validated_data['artist'] = self.context['request'].user
         return super().create(validated_data)
-    
+
     def get_bid_rank(self, obj):
         return obj.calculate_bid_rank()
+
 
 class BidListSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.username', read_only=True)

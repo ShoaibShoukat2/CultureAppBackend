@@ -457,12 +457,6 @@ class EquipmentOrderItem(models.Model):
         return self.quantity * self.price
    
 
-
-
-    
-    
-    
-
 # Payment Model
 class Payment(models.Model):
     PAYMENT_METHODS = (
@@ -674,7 +668,5 @@ class PlatformAnalytics(models.Model):
         return f"Analytics for {self.date}"
     
     
-
-
 
 
