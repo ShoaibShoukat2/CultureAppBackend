@@ -729,9 +729,6 @@ class PaymentViewSet(ModelViewSet):
         
     
     
-    
-    
-    
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def confirm_stripe_payment(self, request):
