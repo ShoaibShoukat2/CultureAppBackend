@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.authtoken.models import Token
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
-
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Count, Sum
 from django.utils import timezone
@@ -301,9 +301,10 @@ class JobViewSet(ModelViewSet):
         serializer = BidListSerializer(bids, many=True)
         return Response(serializer.data)
     
+    # Update the JobViewSet hire_artist method
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def hire_artist(self, request, pk=None):
-        """Hire an artist for the job"""
+        """Hire an artist for the job - Creates payment, contract, and notifications"""
         job = self.get_object()
         bid_id = request.data.get('bid_id')
         
@@ -315,55 +316,207 @@ class JobViewSet(ModelViewSet):
         
         try:
             bid = Bid.objects.get(id=bid_id, job=job)
-            job.hired_artist = bid.artist
-            job.status = 'in_progress'
-            job.final_amount = bid.bid_amount
-            job.save()
             
-            bid.status = 'accepted'
-            bid.save()
+            # Use transaction to ensure all operations succeed or fail together
+            with transaction.atomic():
+                # 1. Update Job
+                job.hired_artist = bid.artist
+                job.status = 'in_progress'
+                job.final_amount = bid.bid_amount
+                job.save()
+                
+                # 2. Update Bid
+                bid.status = 'accepted'
+                bid.save()
+                
+                # 3. Reject other bids
+                job.bids.exclude(id=bid_id).update(status='rejected')
+                
+                # 4. Create Payment (Pending status)
+                payment = Payment.objects.create(
+                    payer=job.buyer,
+                    payee=bid.artist,
+                    job=job,
+                    amount=bid.bid_amount,
+                    payment_method='stripe',  # Default to Stripe
+                    status='pending'
+                )
+                
+                # 5. Auto-generate Contract
+                contract = Contract.objects.create(
+                    job=job,
+                    artist=bid.artist,
+                    buyer=job.buyer,
+                    terms=f"""
+    This contract is for the project: {job.title}
+
+    Project Description:
+    {job.description}
+
+    Deliverables:
+    - Artist agrees to complete the project as described
+    - Delivery time: {bid.delivery_time} days
+    - Quality must meet professional standards
+
+    Payment Terms:
+    - Total Amount: ${bid.bid_amount}
+    - Payment will be released upon project completion and buyer approval
+    - Platform fee (5%) will be deducted from artist earnings
+
+    Rights and Ownership:
+    - Rights will be transferred according to the selected rights type
+    - Artist retains portfolio rights unless exclusive rights are purchased
+
+    Cancellation:
+    - Either party may terminate with valid reason
+    - Dispute resolution through platform support
+
+    By signing this contract, both parties agree to these terms.
+                    """.strip(),
+                    rights_type='display_only',  # Default, can be changed later
+                    amount=bid.bid_amount,
+                    deadline=job.deadline,
+                    status='pending'
+                )
+                
+                # 6. Create Notifications
+                
+                # Notification for Artist (Hired)
+                Notification.objects.create(
+                    recipient=bid.artist,
+                    notification_type='bid_accepted',
+                    title='Congratulations! Your bid was accepted',
+                    message=f'You have been hired for the project "{job.title}". Payment of ${bid.bid_amount} is pending. Please review and sign the contract.'
+                )
+                
+                # Notification for Artist (Contract)
+                Notification.objects.create(
+                    recipient=bid.artist,
+                    notification_type='contract_signed',
+                    title='New Contract Available',
+                    message=f'A contract has been generated for project "{job.title}". Please review and sign it.'
+                )
+                
+                
+                # Notification for Buyer (Confirmation)
+                Notification.objects.create(
+                    recipient=job.buyer,
+                    notification_type='bid_accepted',
+                    title='Artist Hired Successfully',
+                    message=f'You have hired {bid.artist.username} for "${job.title}". Please process the payment to start the project.'
+                )
+                
+                # Notification for other artists (Rejected)
+                rejected_bids = job.bids.filter(status='rejected')
+                for rejected_bid in rejected_bids:
+                    Notification.objects.create(
+                        recipient=rejected_bid.artist,
+                        notification_type='bid_accepted',
+                        title='Bid Not Selected',
+                        message=f'Unfortunately, your bid for "{job.title}" was not selected. Keep trying!'
+                    )
             
-            # Reject other bids
-            job.bids.exclude(id=bid_id).update(status='rejected')
+            return Response({
+                'message': 'Artist hired successfully',
+                'payment_id': payment.id,
+                'contract_id': contract.id,
+                'transaction_id': payment.transaction_id
+            }, status=status.HTTP_200_OK)
             
-            return Response({'message': 'Artist hired successfully'})
         except Bid.DoesNotExist:
             return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        
+        
     
-    
-    
-    
-    
-    
-    
-    
+    # Update the complete_job method
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete_job(self, request, pk=None):
-        """Complete a job"""
+        """Complete a job - Checks Stripe payment, updates job, payment, contract, profiles, and notifications"""
         job = self.get_object()
-        
+
+        # 1. Authorization
         if job.buyer != request.user:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         if job.status != 'in_progress':
             return Response({'error': 'Job is not in progress'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        job.status = 'completed'
-        job.save()
-        
-        # Update artist profile
-        if job.hired_artist:
-            artist_profile = job.hired_artist.artist_profile
-            artist_profile.total_projects_completed += 1
-            artist_profile.total_earnings += job.final_amount or 0
-            artist_profile.save()
-        
-        # Update buyer profile
-        buyer_profile = job.buyer.buyer_profile
-        buyer_profile.calculate_total_spent()
-        
-        return Response({'message': 'Job completed successfully'})
 
+        try:
+            with transaction.atomic():
+
+                # 2. Get Payment
+                payment = Payment.objects.filter(job=job, status='pending').first()
+                if not payment:
+                    return Response({'error': 'Payment not found for this job'}, status=status.HTTP_404_NOT_FOUND)
+
+                # 3. Check Stripe Payment Status (simulate / integrate your actual Stripe check)
+                if payment.payment_method == 'stripe' and not payment.is_stripe_confirmed():
+                    return Response({'error': 'Stripe payment not completed yet'}, status=status.HTTP_400_BAD_REQUEST)
+
+                # 4. Mark Job Completed
+                job.status = 'completed'
+                job.save()
+
+                # 5. Update Payment Status
+                payment.status = 'completed'
+                payment.save()
+
+                # 6. Update Artist Profile
+                if job.hired_artist:
+                    artist_profile = job.hired_artist.artist_profile
+                    artist_earning = payment.calculate_artist_earning()
+                    artist_profile.total_projects_completed += 1
+                    artist_profile.total_earnings += artist_earning
+                    artist_profile.save()
+
+                    # Notification for artist (payment received)
+                    Notification.objects.create(
+                        recipient=job.hired_artist,
+                        notification_type='payment_received',
+                        title='Payment Released',
+                        message=f'Payment of ${artist_earning} has been released for project "{job.title}".'
+                    )
+
+                # 7. Update Buyer Profile
+                buyer_profile = job.buyer.buyer_profile
+                buyer_profile.calculate_total_spent()
+
+                # 8. Update Contract Status
+                try:
+                    contract = Contract.objects.get(job=job)
+                    contract.status = 'completed'
+                    contract.save()
+                except Contract.DoesNotExist:
+                    pass
+
+                # 9. Notifications for Buyer and Artist
+                Notification.objects.create(
+                    recipient=job.buyer,
+                    notification_type='job_completed',
+                    title='Project Completed',
+                    message=f'Project "{job.title}" has been marked as completed. Payment of ${payment.amount} has been processed.'
+                )
+
+                if job.hired_artist:
+                    Notification.objects.create(
+                        recipient=job.hired_artist,
+                        notification_type='job_completed',
+                        title='Project Completed',
+                        message=f'Congratulations! Project "{job.title}" is completed. You can now receive reviews from the buyer.'
+                    )
+
+            return Response({
+                'message': 'Job completed successfully',
+                'payment_completed': True,
+                'artist_earning': float(artist_earning),
+                'platform_fee': float(payment.calculate_platform_fee())
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
