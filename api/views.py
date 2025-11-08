@@ -686,7 +686,6 @@ class PaymentViewSet(ModelViewSet):
                 amount=int(Decimal(amount) * 100),  # Stripe uses cents
                 currency="usd",
                 payment_method_types=["card"],
-                confirm=True,
                 metadata={
                     "job_id": job.id,
                     "buyer_id": request.user.id,
