@@ -474,6 +474,13 @@ class Payment(models.Model):
         ('refunded', 'Refunded'),
     )
     
+    HIRE_STATUS_CHOICES = (
+        ('pending', 'Pending'),     
+        ('released', 'Released'),   
+        ('cancelled', 'Cancelled'),
+    )
+
+    
     payer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='buyer_payments')
     payee = models.ForeignKey(
         CustomUser, 
@@ -489,6 +496,7 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     transaction_id = models.CharField(max_length=100, unique=True, blank=True)
     stripe_payment_intent = models.CharField(max_length=255, blank=True, null=True)
+    hire_status = models.CharField(max_length=20, choices=HIRE_STATUS_CHOICES, default='pending', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
@@ -506,6 +514,12 @@ class Payment(models.Model):
     
     def __str__(self):
         return f"Payment #{self.transaction_id} - ${self.amount}"
+
+
+
+
+
+
 
 # Message Model
 class Message(models.Model):
