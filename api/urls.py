@@ -68,7 +68,6 @@ urlpatterns = [
          JobViewSet.as_view({'post': 'complete_job'}), 
          name='complete-job'),
     
-     path('jobs/<int:job_id>/payment-status/', job_payment_status, name='job-payment-status'),
      
     # ===== Equipment Custom Actions =====
     path('equipment/in-stock/', 
