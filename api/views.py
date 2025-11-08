@@ -639,94 +639,89 @@ class PaymentViewSet(ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def hire_artist_payment(self, request):
         """
-        💳 Stripe payment for hiring an artist for a job
-        - Buyer pays the artist for a specific job
-        - Stripe payment completes immediately
-        - Hire status remains 'pending' until job done
+        💳 Pay an artist for a job and assign artist automatically
+        - Accepts a bid, assigns artist to job, and processes Stripe payment
+        - Hire status remains 'pending' until job completed
         """
         job_id = request.data.get('job_id')
+        bid_id = request.data.get('bid_id')
         amount = request.data.get('amount')
         payment_method = request.data.get('payment_method', 'stripe')
 
-        if not job_id or not amount:
-            return Response({'error': 'Job ID and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not job_id or not bid_id or not amount:
+            return Response({'error': 'Job ID, Bid ID, and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             job = Job.objects.get(id=job_id)
         except Job.DoesNotExist:
             return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ✅ Ensure the requester is the job buyer
+        # Ensure requester is the job buyer
         if job.buyer != request.user:
             return Response({'error': 'You are not authorized to pay for this job'}, status=status.HTTP_403_FORBIDDEN)
 
-        
+        # Ensure job is open
+        if job.status != 'open':
+            return Response({'error': 'Job is not open for hiring'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # 🔹 Step 1: Create Stripe PaymentIntent
+            bid = Bid.objects.get(id=bid_id, job=job)
+        except Bid.DoesNotExist:
+            return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 🔹 Step 1: Assign the artist and update job
+        job.hired_artist = bid.artist
+        job.status = 'in_progress'
+        job.final_amount = Decimal(amount)
+        job.save()
+
+        # Update bid statuses
+        bid.status = 'accepted'
+        bid.save()
+        job.bids.exclude(id=bid_id).update(status='rejected')
+
+        try:
+            # 🔹 Step 2: Create Stripe PaymentIntent
             intent = stripe.PaymentIntent.create(
                 amount=int(Decimal(amount) * 100),  # Stripe uses cents
                 currency="usd",
                 payment_method_types=["card"],
-                confirm=True,  # ✅ Auto-confirm the payment
+                confirm=True,
                 metadata={
                     "job_id": job.id,
                     "buyer_id": request.user.id,
-                    "artist_id": job.hired_artist.id,
-                },
+                    "artist_id": bid.artist.id,
+                    "bid_id": bid.id
+                }
             )
 
-            # ✅ Check if payment succeeded
-            if intent['status'] == 'succeeded':
-                # 🔹 Step 2: Create Payment record (Stripe completed, hire still pending)
-                payment = Payment.objects.create(
-                    payer=request.user,
-                    payee=job.hired_artist,
-                    job=job,
-                    amount=Decimal(amount),
-                    payment_method=payment_method,
-                    status='completed',          # ✅ Stripe payment done
-                    hire_status='pending',       # ⚠️ Waiting for job completion
-                    stripe_payment_intent=intent['id'],
-                )
+            # 🔹 Step 3: Create Payment record
+            status_val = 'completed' if intent['status'] == 'succeeded' else 'pending'
+            payment = Payment.objects.create(
+                payer=request.user,
+                payee=bid.artist,
+                job=job,
+                amount=Decimal(amount),
+                payment_method=payment_method,
+                status=status_val,
+                hire_status='pending',
+                stripe_payment_intent=intent['id']
+            )
 
-                return Response({
-                    "message": "Payment successful. Hire payment is pending release.",
-                    "payment_id": payment.id,
-                    "transaction_id": payment.transaction_id,
-                    "status": payment.status,
-                    "hire_status": payment.hire_status,
-                }, status=status.HTTP_201_CREATED)
+            return Response({
+                "message": "Payment successful and artist hired. Hire payment pending release.",
+                "payment_id": payment.id,
+                "transaction_id": payment.transaction_id,
+                "payment_status": payment.status,
+                "hire_status": payment.hire_status,
+                "job_status": job.status,
+                "hired_artist": bid.artist.username,
+                "bid_status": bid.status
+            }, status=status.HTTP_201_CREATED)
 
-            else:
-                # If Stripe is still processing
-                payment = Payment.objects.create(
-                    payer=request.user,
-                    payee=job.hired_artist,
-                    job=job,
-                    amount=Decimal(amount),
-                    payment_method=payment_method,
-                    status='pending',            # Stripe not yet confirmed
-                    hire_status='pending',
-                    stripe_payment_intent=intent['id'],
-                )
-
-                return Response({
-                    "message": f"Stripe PaymentIntent status: {intent['status']}",
-                    "client_secret": intent['client_secret'],
-                    "payment_id": payment.id,
-                    "transaction_id": payment.transaction_id,
-                    "status": payment.status,
-                    "hire_status": payment.hire_status,
-                }, status=status.HTTP_201_CREATED)
-
-        except stripe.error.CardError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except stripe.error.StripeError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-    
-    
+
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def confirm_stripe_payment(self, request):
