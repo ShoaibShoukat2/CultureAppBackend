@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.authtoken.models import Token
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
+
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Count, Sum
@@ -299,8 +301,9 @@ class JobViewSet(ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @transaction.atomic
     def hire_artist(self, request, pk=None):
-        """Hire an artist for the job"""
+        """Hire an artist and create payment intent"""
         job = self.get_object()
         bid_id = request.data.get('bid_id')
         
@@ -309,29 +312,82 @@ class JobViewSet(ModelViewSet):
         
         if job.status != 'open':
             return Response({'error': 'Job is not open'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             bid = Bid.objects.get(id=bid_id, job=job)
+
+            # ✅ Update job
             job.hired_artist = bid.artist
             job.status = 'in_progress'
             job.final_amount = bid.bid_amount
             job.save()
-            
+
+            # ✅ Update selected bid
             bid.status = 'accepted'
             bid.save()
-            
-            # Reject other bids
+
+            # ✅ Reject all other bids
             job.bids.exclude(id=bid_id).update(status='rejected')
-            
-            return Response({'message': 'Artist hired successfully'})
+
+            # ✅ Create Payment (ESCROW)
+            payment = Payment.objects.create(
+                payer=request.user,     # Buyer
+                payee=bid.artist,       # Artist
+                job=job,
+                amount=bid.bid_amount,
+                payment_method='stripe',
+                status='pending'
+            )
+
+            # ✅ Create Stripe Payment Intent
+            intent = stripe.PaymentIntent.create(
+                amount=int(bid.bid_amount * 100),
+                currency="usd",
+                payment_method_types=["card"],
+                metadata={
+                    "payment_id": payment.id,
+                    "job_id": job.id,
+                    "artist_id": bid.artist.id,
+                    "buyer_id": request.user.id
+                }
+            )
+
+            payment.stripe_payment_intent = intent['id']
+            payment.save()
+
+            # ✅ Create Contract Automatically
+            Contract.objects.create(
+                job=job,
+                buyer=request.user,
+                artist=bid.artist,
+                terms=f"This contract covers job '{job.title}' for ${bid.bid_amount}. Buyer agrees to pay on completion.",
+                is_signed=True,
+                status='active'
+            )
+
+            return Response({
+                'message': 'Artist hired successfully. Contract created.',
+                'payment': {
+                    'id': payment.id,
+                    'amount': payment.amount,
+                    'client_secret': intent['client_secret'],
+                    'transaction_id': payment.transaction_id
+                }
+            }, status=status.HTTP_200_OK)
+
         except Bid.DoesNotExist:
             return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+            
+        
+        
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete_job(self, request, pk=None):
-        """Complete a job"""
+        """Complete a job and release payment to artist"""
         job = self.get_object()
         
         if job.buyer != request.user:
@@ -340,21 +396,77 @@ class JobViewSet(ModelViewSet):
         if job.status != 'in_progress':
             return Response({'error': 'Job is not in progress'}, status=status.HTTP_400_BAD_REQUEST)
         
-        job.status = 'completed'
-        job.save()
+        # ✅ CHECK IF PAYMENT EXISTS AND IS COMPLETED
+        try:
+            payment = Payment.objects.get(job=job, payer=request.user)
+            
+            if payment.status != 'completed':
+                return Response({
+                    'error': 'Payment must be completed before marking job as complete'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Mark job as completed
+            job.status = 'completed'
+            job.save()
+            
+            # Update artist profile
+            if job.hired_artist:
+                artist_profile = job.hired_artist.artist_profile
+                artist_profile.total_projects_completed += 1
+                artist_profile.total_earnings += payment.calculate_artist_earning()
+                artist_profile.save()
+            
+            # Update buyer profile
+            buyer_profile = job.buyer.buyer_profile
+            buyer_profile.calculate_total_spent()
+            
+            # ✅ CREATE NOTIFICATION FOR ARTIST
+            Notification.objects.create(
+                recipient=job.hired_artist,
+                notification_type='job_completed',
+                title='Job Completed',
+                message=f'Job "{job.title}" has been marked as completed. Payment released!'
+            )
+            
+            return Response({
+                'message': 'Job completed successfully',
+                'payment_released': payment.calculate_artist_earning()
+            })
+            
+        except Payment.DoesNotExist:
+            return Response({
+                'error': 'No payment found for this job'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+            
+# ✅ ADD NEW ENDPOINT TO CHECK PAYMENT STATUS
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def job_payment_status(request, job_id):
+    """Check payment status for a specific job"""
+    try:
+        job = Job.objects.get(id=job_id)
         
-        # Update artist profile
-        if job.hired_artist:
-            artist_profile = job.hired_artist.artist_profile
-            artist_profile.total_projects_completed += 1
-            artist_profile.total_earnings += job.final_amount or 0
-            artist_profile.save()
+        # Check if user is buyer or hired artist
+        if request.user not in [job.buyer, job.hired_artist]:
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Update buyer profile
-        buyer_profile = job.buyer.buyer_profile
-        buyer_profile.calculate_total_spent()
+        payment = Payment.objects.filter(job=job).first()
         
-        return Response({'message': 'Job completed successfully'})
+        if not payment:
+            return Response({
+                'payment_exists': False,
+                'message': 'No payment created yet'
+            })
+        
+        return Response({
+            'payment_exists': True,
+            'payment': PaymentSerializer(payment).data,
+            'can_complete_job': payment.status == 'completed' and job.status == 'in_progress'
+        })
+        
+    except Job.DoesNotExist:
+        return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 # Bid Views
@@ -723,6 +835,10 @@ class ContractViewSet(ModelViewSet):
             return Response({'message': 'Contract signed by buyer'})
         else:
             return Response({'error': 'Cannot sign contract'}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+
 
 # Notification Views
 class NotificationViewSet(ReadOnlyModelViewSet):
