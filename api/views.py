@@ -660,9 +660,7 @@ class PaymentViewSet(ModelViewSet):
         if job.buyer != request.user:
             return Response({'error': 'You are not authorized to pay for this job'}, status=status.HTTP_403_FORBIDDEN)
 
-        # ✅ Ensure job has an assigned artist
-        if not job.hired_artist:
-            return Response({'error': 'No artist assigned for this job'}, status=status.HTTP_400_BAD_REQUEST)
+        
 
         try:
             # 🔹 Step 1: Create Stripe PaymentIntent
