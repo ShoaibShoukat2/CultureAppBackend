@@ -300,6 +300,12 @@ class BidListSerializer(serializers.ModelSerializer):
         fields = ['id', 'job_title', 'artist_name', 'bid_amount', 'delivery_time',
                  'status', 'created_at']
 
+
+
+
+
+
+
 # Equipment Serializers
 class EquipmentSerializer(serializers.ModelSerializer):
     in_stock = serializers.SerializerMethodField()

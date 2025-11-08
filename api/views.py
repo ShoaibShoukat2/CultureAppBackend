@@ -250,8 +250,11 @@ class ArtworkViewSet(ModelViewSet):
         serializer = ArtworkListSerializer(featured_artworks, many=True)
         return Response(serializer.data)
     
-
     
+    
+
+
+  
 
 # Job Views
 class JobViewSet(ModelViewSet):
@@ -326,6 +329,11 @@ class JobViewSet(ModelViewSet):
             return Response({'message': 'Artist hired successfully'})
         except Bid.DoesNotExist:
             return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    
+    
+    
+    
     
     
     
@@ -438,7 +446,9 @@ class EquipmentViewSet(ModelViewSet):
         serializer = self.get_serializer(in_stock_equipment, many=True)
         return Response(serializer.data)
     
-    
+
+
+
     
 
 # Order Views
