@@ -334,8 +334,8 @@ class JobViewSet(ModelViewSet):
                 
                 # 4. Create Payment (Pending status)
                 payment = Payment.objects.create(
-                    payer=job.buyer,
-                    payee=bid.artist,
+                    payer=job.payer,
+                    payee=bid.payee,
                     job=job,
                     amount=bid.bid_amount,
                     payment_method='stripe',  # Default to Stripe
@@ -345,7 +345,7 @@ class JobViewSet(ModelViewSet):
                 # 5. Auto-generate Contract
                 contract = Contract.objects.create(
                     job=job,
-                    artist=bid.artist,
+                    artist=bid.payee,
                     buyer=job.buyer,
                     terms=f"""
     This contract is for the project: {job.title}
@@ -383,7 +383,7 @@ class JobViewSet(ModelViewSet):
                 
                 # Notification for Artist (Hired)
                 Notification.objects.create(
-                    recipient=bid.artist,
+                    recipient=bid.payee,
                     notification_type='bid_accepted',
                     title='Congratulations! Your bid was accepted',
                     message=f'You have been hired for the project "{job.title}". Payment of ${bid.bid_amount} is pending. Please review and sign the contract.'
@@ -391,7 +391,7 @@ class JobViewSet(ModelViewSet):
                 
                 # Notification for Artist (Contract)
                 Notification.objects.create(
-                    recipient=bid.artist,
+                    recipient=bid.payee,
                     notification_type='contract_signed',
                     title='New Contract Available',
                     message=f'A contract has been generated for project "{job.title}". Please review and sign it.'
@@ -400,7 +400,7 @@ class JobViewSet(ModelViewSet):
                 
                 # Notification for Buyer (Confirmation)
                 Notification.objects.create(
-                    recipient=job.buyer,
+                    recipient=job.payer,
                     notification_type='bid_accepted',
                     title='Artist Hired Successfully',
                     message=f'You have hired {bid.artist.username} for "${job.title}". Please process the payment to start the project.'
@@ -410,7 +410,7 @@ class JobViewSet(ModelViewSet):
                 rejected_bids = job.bids.filter(status='rejected')
                 for rejected_bid in rejected_bids:
                     Notification.objects.create(
-                        recipient=rejected_bid.artist,
+                        recipient=rejected_bid.payee,
                         notification_type='bid_accepted',
                         title='Bid Not Selected',
                         message=f'Unfortunately, your bid for "{job.title}" was not selected. Keep trying!'
