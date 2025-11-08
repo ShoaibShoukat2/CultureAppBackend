@@ -361,9 +361,9 @@ class JobViewSet(ModelViewSet):
                 buyer=request.user,
                 artist=bid.artist,
                 terms=f"This contract covers job '{job.title}' for ${bid.bid_amount}. Buyer agrees to pay on completion.",
-                is_signed=True,
                 status='active'
             )
+            
 
             return Response({
                 'message': 'Artist hired successfully. Contract created.',
@@ -381,7 +381,9 @@ class JobViewSet(ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-            
+        
+
+        
         
         
     
