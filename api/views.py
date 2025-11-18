@@ -14,6 +14,7 @@ from django.utils import timezone
 from .models import *
 from .serializers import *
 from .permissions import IsOwnerOrReadOnly, IsArtistOrReadOnly, IsBuyerOrReadOnly
+from api.notifications.utils import send_notification_email
 
 
 # Payment Views
@@ -260,8 +261,7 @@ def create_notification(recipient, notification_type, title, message):
         message=message
     )
     
-
-# Job Views
+    
 class JobViewSet(ModelViewSet):
     """Job/Project CRUD operations"""
     queryset = Job.objects.select_related('buyer', 'category', 'hired_artist').prefetch_related('bids')
@@ -287,13 +287,16 @@ class JobViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def get_queryset(self):
-        """Filter jobs based on user type and status"""
+        """Filter jobs for list view (only open jobs)."""
         queryset = self.queryset
         if self.action == 'list':
-            # Only show open jobs in list view
             queryset = queryset.filter(status='open')
         return queryset
     
+
+    # --------------------------------------------------
+    #              GET JOB BIDS
+    # --------------------------------------------------
     @action(detail=True, methods=['get'])
     def bids(self, request, pk=None):
         """Get job bids"""
@@ -305,13 +308,14 @@ class JobViewSet(ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = BidListSerializer(bids, many=True)
         return Response(serializer.data)
-    
-    
-    
-     
+
+
+    # --------------------------------------------------
+    #              HIRE ARTIST (WITH EMAILS)
+    # --------------------------------------------------
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def hire_artist(self, request, pk=None):
-        """Hire an artist for the job - verifies payment before proceeding"""
+        """Hire an artist for the job after verifying payment"""
         job = self.get_object()
         bid_id = request.data.get('bid_id')
 
@@ -324,13 +328,13 @@ class JobViewSet(ModelViewSet):
         try:
             bid = Bid.objects.get(id=bid_id, job=job)
 
-            # 🔹 Step 1: Check if buyer has completed payment for this job
+            # Step 1: Verify payment
             payment = Payment.objects.filter(
                 payer=request.user,
                 job=job,
                 payee=bid.artist,
-                status='completed',  # Stripe payment confirmed
-                hire_status='pending'  # Escrow not yet released
+                status='completed',
+                hire_status='pending'
             ).first()
 
             if not payment:
@@ -338,46 +342,45 @@ class JobViewSet(ModelViewSet):
                     'error': 'Payment not completed for this job. Please pay first.'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # 🔹 Step 2: Payment verified, proceed with hiring
+            # Step 2: Hire artist
             job.hired_artist = bid.artist
             job.status = 'in_progress'
             job.final_amount = bid.bid_amount
             job.save()
 
-            # Update bid status
             bid.status = 'accepted'
             bid.save()
 
-            # Reject other bids
+            # Reject all other bids
             job.bids.exclude(id=bid_id).update(status='rejected')
 
-            # 🔹 Step 3: Create Contract
+            # Step 3: Create contract
             contract = Contract.objects.create(
                 job=job,
                 artist=bid.artist,
                 buyer=request.user,
-                terms=f"Contract for project: {job.title}\n\nDelivery Time: {bid.delivery_time} days\nAmount: ${bid.bid_amount}\n\nArtist will deliver the work as per job requirements. Payment will be released upon successful completion.",
+                terms=f"Contract for project: {job.title}\n\nDelivery Time: {bid.delivery_time} days\nAmount: ${bid.bid_amount}\n\nArtist will deliver based on requirements.",
                 rights_type='display_only',
                 amount=bid.bid_amount,
                 deadline=timezone.now() + timezone.timedelta(days=bid.delivery_time),
                 status='pending'
             )
 
-            # 🔹 Step 4: Notifications
-            # Notification to Artist
+            # --------------------------------------------------
+            #                NOTIFICATIONS (APP)
+            # --------------------------------------------------
             create_notification(
                 recipient=bid.artist,
                 notification_type='bid_accepted',
                 title='Your bid was accepted!',
-                message=f'Congratulations! Your bid for "{job.title}" has been accepted. Please review and sign the contract.'
+                message=f'Your bid for "{job.title}" has been accepted.'
             )
 
-            # Notification to Buyer
             create_notification(
                 recipient=request.user,
                 notification_type='bid_accepted',
                 title='Artist Hired Successfully',
-                message=f'You have hired {bid.artist.username} for "{job.title}". Payment has been verified and job is now in progress.'
+                message=f'You hired {bid.artist.username} for "{job.title}".'
             )
 
             # Notify rejected artists
@@ -385,9 +388,35 @@ class JobViewSet(ModelViewSet):
             for rejected_bid in rejected_bids:
                 create_notification(
                     recipient=rejected_bid.artist,
-                    notification_type='bid_accepted',
+                    notification_type='bid_rejected',
                     title='Bid Not Selected',
-                    message=f'Unfortunately, your bid for "{job.title}" was not selected. Keep trying!'
+                    message=f'Your bid for "{job.title}" was not selected.'
+                )
+
+            # --------------------------------------------------
+            #            EMAIL NOTIFICATIONS
+            # --------------------------------------------------
+
+            # Email to Artist (Bid Accepted)
+            send_notification_email(
+                subject="Your Bid Was Accepted!",
+                message=f"Good news! Your bid for '{job.title}' has been accepted. Please sign the contract.",
+                recipient_email=bid.artist.email
+            )
+
+            # Email to Buyer (Confirmation)
+            send_notification_email(
+                subject="Artist Hired Successfully",
+                message=f"You hired {bid.artist.username} for the job '{job.title}'.",
+                recipient_email=request.user.email
+            )
+
+            # Email to Rejected Artists
+            for rejected_bid in rejected_bids:
+                send_notification_email(
+                    subject="Bid Not Selected",
+                    message=f"Unfortunately, your bid for '{job.title}' was not selected.",
+                    recipient_email=rejected_bid.artist.email
                 )
 
             return Response({
@@ -398,13 +427,16 @@ class JobViewSet(ModelViewSet):
                 'hire_status': payment.hire_status,
                 'transaction_id': payment.transaction_id,
                 'amount': str(payment.amount)
-            }, status=status.HTTP_200_OK)
+            })
 
         except Bid.DoesNotExist:
             return Response({'error': 'Bid not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        
-        
+
+
+    # --------------------------------------------------
+    #                COMPLETE JOB (WITH EMAILS)
+    # --------------------------------------------------
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def complete_job(self, request, pk=None):
         """Complete a job"""
@@ -416,33 +448,50 @@ class JobViewSet(ModelViewSet):
         if job.status != 'in_progress':
             return Response({'error': 'Job is not in progress'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # ✅ Update job status
+        # Update job status
         job.status = 'completed'
         job.save()
         
-        # ✅ Update payment hire_status
+        # Release payment
         payment = Payment.objects.filter(job=job, payer=request.user, payee=job.hired_artist).first()
         if payment:
             payment.hire_status = 'released'
             payment.save()
-        
-        # ✅ Update artist profile
+
+        # Update artist profile
         if job.hired_artist:
             artist_profile = job.hired_artist.artist_profile
             artist_profile.total_projects_completed += 1
             artist_profile.total_earnings += job.final_amount or 0
             artist_profile.save()
-        
-        # ✅ Update buyer profile
+
+        # Update buyer profile
         buyer_profile = job.buyer.buyer_profile
         buyer_profile.calculate_total_spent()
+
+        # --------------------------------------------------
+        #            EMAIL NOTIFICATIONS
+        # --------------------------------------------------
+
+        # Email to Artist
+        send_notification_email(
+            subject="Job Completed",
+            message=f"The job '{job.title}' has been marked as completed. Your payment has been released.",
+            recipient_email=job.hired_artist.email
+        )
+
+        # Email to Buyer
+        send_notification_email(
+            subject="Job Completed Successfully",
+            message=f"You successfully completed the job '{job.title}'.",
+            recipient_email=request.user.email
+        )
         
         return Response({
             'message': 'Job completed successfully',
             'job_status': job.status,
             'payment_hire_status': payment.hire_status if payment else None
         })
-
 
 
 
