@@ -136,8 +136,22 @@ class Artwork(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
     artwork_type = models.CharField(max_length=20, choices=ARTWORK_TYPES, default='digital')
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    image = models.ImageField(upload_to='artworks/')
+    
+    # S3 Storage fields (new)
+    s3_image_key = models.CharField(max_length=500, blank=True, null=True, help_text="S3 object key for original image")
+    s3_image_url = models.URLField(max_length=1000, blank=True, null=True, help_text="S3 URL for original image")
+    s3_watermarked_key = models.CharField(max_length=500, blank=True, null=True, help_text="S3 object key for watermarked image")
+    s3_watermarked_url = models.URLField(max_length=1000, blank=True, null=True, help_text="S3 URL for watermarked image")
+    
+    # Legacy local storage fields (kept for backward compatibility)
+    image = models.ImageField(upload_to='artworks/', blank=True, null=True)
     watermarked_image = models.ImageField(upload_to='watermarked_artworks/', blank=True, null=True)
+    
+    # Rekognition metadata
+    rekognition_checked = models.BooleanField(default=False, help_text="Whether artwork was checked for duplicates")
+    rekognition_labels = models.JSONField(blank=True, null=True, help_text="Detected labels from Rekognition")
+    similarity_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Highest similarity score with existing artworks")
+    
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     views_count = models.PositiveIntegerField(default=0)

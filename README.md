@@ -1,4 +1,33 @@
-# 🎯 Complete API Usage Guide - Detailed Documentation
+# 🎯 CultureUp - Complete API Documentation
+
+## 🆕 NEW: AWS S3 Storage & Rekognition Duplicate Detection (Integrated)
+
+### Features
+- ✅ **AWS S3 Storage**: All artworks automatically stored in cloud
+- ✅ **AI Duplicate Detection**: Automatic duplicate checking using AWS Rekognition
+- ✅ **Security**: Prevents plagiarism and copyright infringement
+- ✅ **Seamless Integration**: Works with existing `/api/artworks/` endpoints
+
+### Quick Setup
+1. Install: `pip install boto3`
+2. Configure `.env` with AWS credentials:
+   ```env
+   AWS_ACCESS_KEY_ID=your_key
+   AWS_SECRET_ACCESS_KEY=your_secret
+   AWS_STORAGE_BUCKET_NAME=your_bucket
+   AWS_S3_REGION_NAME=us-east-1
+   ```
+3. Run: `python manage.py migrate`
+4. Test: `python test_aws_connection.py`
+
+### How It Works
+- **Same endpoints** as before: `POST /api/artworks/`, `PUT /api/artworks/{id}/`, etc.
+- **Automatic S3 upload** when creating/updating artworks
+- **Automatic duplicate check** using AWS Rekognition AI
+- **Automatic watermark** generation and S3 storage
+- **No code changes needed** in your frontend!
+
+---
 
 ## Base URL
 ```
@@ -11,7 +40,7 @@ http://localhost:8000/api/
 1. [Authentication](#authentication)
 2. [Artist Profiles](#artist-profiles)
 3. [Buyer Profiles](#buyer-profiles)
-4. [Artworks](#artworks)
+4. [Artworks (with S3 & Rekognition)](#artworks)
 5. [Jobs/Projects](#jobs-projects)
 6. [Bids](#bids)
 7. [Orders](#orders)
@@ -20,7 +49,8 @@ http://localhost:8000/api/
 10. [Reviews](#reviews)
 11. [Contracts](#contracts)
 12. [Notifications](#notifications)
-13. [Common Response Formats](#common-response-formats)
+
+---
 
 ---
 
@@ -414,7 +444,9 @@ Content-Type: application/json
 
 ---
 
-## 🎨 Artworks
+## 🎨 Artworks (with S3 & Rekognition Integration)
+
+**🆕 Now with automatic S3 storage and AI duplicate detection!**
 
 ### 1. List All Artworks
 **Endpoint:** `GET /api/artworks/`
@@ -483,12 +515,12 @@ GET /api/artworks/?category=1&artwork_type=digital&min_price=100&max_price=500&i
 
 ---
 
-### 3. Create Artwork
+### 3. Create Artwork (🆕 with S3 & Duplicate Detection)
 **Endpoint:** `POST /api/artworks/`
 
 **Headers:**
 ```
-Authorization: Token YOUR_TOKEN
+Authorization: Token YOUR_ARTIST_TOKEN
 Content-Type: multipart/form-data
 ```
 
@@ -514,38 +546,90 @@ is_featured: false
 - `is_available`: Optional, boolean (default: true)
 - `is_featured`: Optional, boolean (default: false)
 
+**🆕 What Happens Automatically:**
+1. ✅ Image uploaded to AWS S3 (cloud storage)
+2. ✅ AI checks for duplicate artworks using AWS Rekognition
+3. ✅ Watermark generated and uploaded to S3
+4. ✅ Rekognition labels detected (e.g., "Art", "Painting", "Digital")
+
 **Success Response (201 Created):**
 ```json
 {
+  "message": "Artwork uploaded successfully",
+  "artwork": {
     "id": 1,
     "artist": {
-        "id": 1,
-        "username": "artist_john"
+      "id": 1,
+      "username": "artist_john"
     },
     "title": "Sunset Over Mountains",
     "description": "A beautiful digital painting...",
     "category": {
-        "id": 1,
-        "name": "Digital Art"
+      "id": 1,
+      "name": "Digital Art"
     },
     "artwork_type": "digital",
     "price": "299.99",
-    "image": "http://localhost:8000/media/artworks/sunset.jpg",
-    "watermarked_image": "http://localhost:8000/media/artworks/sunset_wm.jpg",
+    "s3_image_url": "https://bucket.s3.amazonaws.com/artworks/1/uuid.jpg",
+    "s3_watermarked_url": "https://bucket.s3.amazonaws.com/artworks/1/watermarked_uuid.jpg",
+    "rekognition_checked": true,
+    "rekognition_labels": [
+      {"name": "Art", "confidence": 99.5},
+      {"name": "Painting", "confidence": 98.2},
+      {"name": "Sunset", "confidence": 95.0}
+    ],
+    "similarity_score": "0.00",
     "is_available": true,
     "is_featured": false,
     "views_count": 0,
     "likes_count": 0,
     "created_at": "2025-10-12T10:30:00Z"
+  },
+  "duplicate_check": {
+    "checked": true,
+    "total_compared": 10,
+    "duplicate_found": false
+  },
+  "rekognition_labels": [
+    {"name": "Art", "confidence": 99.5},
+    {"name": "Painting", "confidence": 98.2}
+  ]
 }
 ```
 
+**🚫 Duplicate Detected Response (400 Bad Request):**
+```json
+{
+  "error": "Duplicate artwork detected",
+  "message": "This artwork is too similar to an existing artwork in our system",
+  "duplicate_detected": true,
+  "similarity_score": 92.5,
+  "matched_artwork": {
+    "id": 5,
+    "title": "Similar Artwork",
+    "artist": "john_doe"
+  }
+}
+```
+
+**How Duplicate Detection Works:**
+- **Label Detection (60%)**: AI identifies objects/scenes (e.g., "Portrait", "Landscape")
+- **Face Comparison (40%)**: Compares faces in portraits
+- **Combined Score**: If ≥ 85% similar → Rejected as duplicate
+- **Same Artist**: Allowed to upload variations of their own work
+
 ---
 
-### 4. Update Artwork
-**Endpoint:** `PATCH /api/artworks/{id}/`
+### 4. Update Artwork (🆕 with S3 Support)
+**Endpoint:** `PATCH /api/artworks/{id}/` or `PUT /api/artworks/{id}/`
 
-**Request Body:**
+**Headers:**
+```
+Authorization: Token YOUR_ARTIST_TOKEN
+Content-Type: multipart/form-data
+```
+
+**Request Body (to update text fields only):**
 ```json
 {
     "price": "349.99",
@@ -553,6 +637,22 @@ is_featured: false
     "description": "Updated description"
 }
 ```
+
+**Request Body (to update image):**
+```
+image: [new file upload]
+title: "Updated Title"
+price: 349.99
+```
+
+**🆕 What Happens When Updating Image:**
+1. ✅ Old image deleted from S3
+2. ✅ New image uploaded to S3
+3. ✅ Duplicate check runs again
+4. ✅ New watermark generated
+5. ✅ New Rekognition labels detected
+
+**Note:** Only the artwork owner (artist) can update their artwork.
 
 ---
 
