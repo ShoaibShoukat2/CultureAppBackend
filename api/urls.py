@@ -44,6 +44,11 @@ urlpatterns = [
          ArtistProfileViewSet.as_view({'get': 'reviews'}), 
          name='artist-reviews'),
     path('artist-profiles/<int:user_id>/artworks/', ArtworkViewSet.as_view({'get': 'list'}), name='artist-artworks'),
+    
+    # ===== Buyer Profile Custom Actions =====
+    path('buyer-profiles/<int:user_id>/purchases/', 
+         BuyerProfileViewSet.as_view({'get': 'purchases'}), 
+         name='buyer-purchases'),
 
     
 
@@ -148,6 +153,7 @@ BUYER PROFILES:
 - PUT    /api/buyer-profiles/{id}/
 - PATCH  /api/buyer-profiles/{id}/
 - DELETE /api/buyer-profiles/{id}/
+- GET    /api/buyer-profiles/{id}/purchases/
 
 CATEGORIES:
 - GET    /api/categories/

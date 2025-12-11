@@ -178,6 +178,29 @@ class BuyerProfileViewSet(ModelViewSet):
         if self.action in ['update', 'partial_update']:
             return [IsAuthenticated(), IsOwnerOrReadOnly()]
         return [IsAuthenticatedOrReadOnly()]
+    
+    @action(detail=True, methods=['get'])
+    def purchases(self, request, user_id=None):
+        """Get buyer's purchase history including orders and payments"""
+        buyer_profile = self.get_object()
+        user = buyer_profile.user
+        
+        # Get orders (artwork/equipment purchases)
+        orders = user.buyer_orders.all().order_by('-created_at')
+        orders_data = OrderSerializer(orders, many=True).data
+        
+        # Get payments (job/artist hiring payments)
+        payments = user.buyer_payments.all().order_by('-created_at')
+        payments_data = PaymentSerializer(payments, many=True).data
+        
+        return Response({
+            'orders': orders_data,
+            'payments': payments_data,
+            'total_orders': orders.count(),
+            'total_payments': payments.count(),
+            'completed_orders': orders.filter(status='completed').count(),
+            'completed_payments': payments.filter(status='completed').count(),
+        })
 
 # Category Views
 class CategoryViewSet(ReadOnlyModelViewSet):
