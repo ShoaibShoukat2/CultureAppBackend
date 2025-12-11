@@ -2,6 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import *
+from .admin_urls import admin_urlpatterns
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -120,6 +121,9 @@ urlpatterns = [
     path('analytics/calculate-today/', 
          PlatformAnalyticsViewSet.as_view({'post': 'calculate_today'}), 
          name='calculate-today-analytics'),
+    
+    # ===== ADMIN ROUTES =====
+    path('admin/', include(admin_urlpatterns)),
     
     path('', include(router.urls)),
 ]

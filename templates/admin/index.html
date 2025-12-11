@@ -1,0 +1,205 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div id="content-main">
+    <div class="admin-stats" id="admin-stats">
+        <div class="stat-card">
+            <h3>Total Users</h3>
+            <div class="number" id="total-users">-</div>
+            <div class="description">Registered users</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Active Artists</h3>
+            <div class="number" id="total-artists">-</div>
+            <div class="description">Artist accounts</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Buyers</h3>
+            <div class="number" id="total-buyers">-</div>
+            <div class="description">Buyer accounts</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Revenue</h3>
+            <div class="number" id="total-revenue">$-</div>
+            <div class="description">Platform revenue</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Active Jobs</h3>
+            <div class="number" id="open-jobs">-</div>
+            <div class="description">Open job postings</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Total Artworks</h3>
+            <div class="number" id="total-artworks">-</div>
+            <div class="description">Uploaded artworks</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Pending Reviews</h3>
+            <div class="number" id="pending-artworks">-</div>
+            <div class="description">Artworks awaiting review</div>
+        </div>
+        
+        <div class="stat-card">
+            <h3>New Users Today</h3>
+            <div class="number" id="new-users-today">-</div>
+            <div class="description">Registered today</div>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+            <a href="{% url 'admin:api_customuser_changelist' %}" class="action-btn">Manage Users</a>
+            <a href="{% url 'admin:api_artwork_changelist' %}" class="action-btn">Review Artworks</a>
+            <a href="{% url 'admin:api_job_changelist' %}" class="action-btn">Manage Jobs</a>
+            <a href="{% url 'admin:api_payment_changelist' %}" class="action-btn">Monitor Payments</a>
+            <a href="{% url 'admin:api_category_changelist' %}" class="action-btn">Manage Categories</a>
+            <a href="{% url 'admin:api_equipment_changelist' %}" class="action-btn">Manage Equipment</a>
+            <a href="/api/admin/dashboard/" target="_blank" class="action-btn">API Dashboard</a>
+            <a href="/api/admin/revenue-report/" target="_blank" class="action-btn">Revenue Report</a>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+        <div class="module">
+            <h2>Recent Users</h2>
+            <div id="recent-users">Loading...</div>
+        </div>
+        
+        <div class="module">
+            <h2>Recent Artworks</h2>
+            <div id="recent-artworks">Loading...</div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+        <div class="module">
+            <h2>Recent Jobs</h2>
+            <div id="recent-jobs">Loading...</div>
+        </div>
+        
+        <div class="module">
+            <h2>Recent Payments</h2>
+            <div id="recent-payments">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load dashboard statistics
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardStats();
+});
+
+function loadDashboardStats() {
+    fetch('/api/admin/dashboard/', {
+        headers: {
+            'Authorization': 'Token ' + getAuthToken(),
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Update statistics
+        document.getElementById('total-users').textContent = data.user_stats.total_users;
+        document.getElementById('total-artists').textContent = data.user_stats.artists;
+        document.getElementById('total-buyers').textContent = data.user_stats.buyers;
+        document.getElementById('total-revenue').textContent = '$' + parseFloat(data.financial_stats.total_revenue).toLocaleString();
+        document.getElementById('open-jobs').textContent = data.content_stats.open_jobs;
+        document.getElementById('total-artworks').textContent = data.content_stats.total_artworks;
+        document.getElementById('pending-artworks').textContent = data.content_stats.pending_artworks;
+        document.getElementById('new-users-today').textContent = data.user_stats.new_users_today;
+        
+        // Update recent activity
+        updateRecentUsers(data.recent_activity.recent_users);
+        updateRecentArtworks(data.recent_activity.recent_artworks);
+        updateRecentJobs(data.recent_activity.recent_jobs);
+        updateRecentPayments(data.recent_activity.recent_payments);
+    })
+    .catch(error => {
+        console.error('Error loading dashboard stats:', error);
+        document.getElementById('admin-stats').innerHTML = '<p>Error loading statistics. Please check your authentication.</p>';
+    });
+}
+
+function updateRecentUsers(users) {
+    const container = document.getElementById('recent-users');
+    if (users.length === 0) {
+        container.innerHTML = '<p>No recent users</p>';
+        return;
+    }
+    
+    const html = users.map(user => `
+        <div style="padding: 8px; border-bottom: 1px solid #eee;">
+            <strong>${user.username}</strong> (${user.user_type})
+            <br><small>${user.email} - ${new Date(user.created_at).toLocaleDateString()}</small>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateRecentArtworks(artworks) {
+    const container = document.getElementById('recent-artworks');
+    if (artworks.length === 0) {
+        container.innerHTML = '<p>No recent artworks</p>';
+        return;
+    }
+    
+    const html = artworks.map(artwork => `
+        <div style="padding: 8px; border-bottom: 1px solid #eee;">
+            <strong>${artwork.title}</strong> by ${artwork.artist__username}
+            <br><small>$${artwork.price} - ${new Date(artwork.created_at).toLocaleDateString()}</small>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateRecentJobs(jobs) {
+    const container = document.getElementById('recent-jobs');
+    if (jobs.length === 0) {
+        container.innerHTML = '<p>No recent jobs</p>';
+        return;
+    }
+    
+    const html = jobs.map(job => `
+        <div style="padding: 8px; border-bottom: 1px solid #eee;">
+            <strong>${job.title}</strong> by ${job.buyer__username}
+            <br><small>Status: ${job.status} - ${new Date(job.created_at).toLocaleDateString()}</small>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateRecentPayments(payments) {
+    const container = document.getElementById('recent-payments');
+    if (payments.length === 0) {
+        container.innerHTML = '<p>No recent payments</p>';
+        return;
+    }
+    
+    const html = payments.map(payment => `
+        <div style="padding: 8px; border-bottom: 1px solid #eee;">
+            <strong>${payment.transaction_id}</strong>
+            <br><small>$${payment.amount} - ${payment.status} - ${new Date(payment.created_at).toLocaleDateString()}</small>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function getAuthToken() {
+    // This would need to be implemented based on your authentication system
+    // For now, return empty string - you'll need to handle authentication properly
+    return '';
+}
+</script>
+{% endblock %}

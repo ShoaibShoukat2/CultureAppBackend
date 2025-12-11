@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.utils.html import format_html
+from django.urls import reverse
+from django.utils.safestring import mark_safe
 from .models import (
     CustomUser, ArtistProfile, BuyerProfile, Category, Artwork,
     Job, Bid, Equipment, Order, ArtworkOrderItem, EquipmentOrderItem,
@@ -7,9 +10,60 @@ from .models import (
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ('id','username', 'email', 'user_type', 'is_verified', 'is_staff', 'created_at')
-    list_filter = ('user_type', 'is_verified', 'is_staff', 'is_superuser')
-    search_fields = ('username', 'email', 'phone_number')
+    list_display = ('id', 'username', 'email', 'user_type', 'is_verified', 'is_active', 'is_staff', 'created_at', 'user_actions')
+    list_filter = ('user_type', 'is_verified', 'is_staff', 'is_superuser', 'is_active', 'created_at')
+    search_fields = ('username', 'email', 'phone_number', 'first_name', 'last_name')
+    readonly_fields = ('created_at', 'updated_at', 'last_login')
+    list_editable = ('is_verified', 'is_active')
+    actions = ['verify_users', 'unverify_users', 'activate_users', 'deactivate_users']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('username', 'email', 'first_name', 'last_name', 'phone_number')
+        }),
+        ('User Type & Status', {
+            'fields': ('user_type', 'is_verified', 'is_active', 'is_staff', 'is_superuser')
+        }),
+        ('Profile', {
+            'fields': ('profile_image',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'last_login'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_actions(self, obj):
+        """Quick action buttons for user management"""
+        actions = []
+        if not obj.is_verified:
+            actions.append(f'<a class="button" href="#" onclick="verifyUser({obj.id})">Verify</a>')
+        if not obj.is_active:
+            actions.append(f'<a class="button" href="#" onclick="activateUser({obj.id})">Activate</a>')
+        else:
+            actions.append(f'<a class="button" href="#" onclick="deactivateUser({obj.id})">Deactivate</a>')
+        return mark_safe(' '.join(actions))
+    user_actions.short_description = 'Quick Actions'
+    
+    def verify_users(self, request, queryset):
+        updated = queryset.update(is_verified=True)
+        self.message_user(request, f'{updated} users verified successfully.')
+    verify_users.short_description = "Verify selected users"
+    
+    def unverify_users(self, request, queryset):
+        updated = queryset.update(is_verified=False)
+        self.message_user(request, f'{updated} users unverified.')
+    unverify_users.short_description = "Unverify selected users"
+    
+    def activate_users(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated} users activated.')
+    activate_users.short_description = "Activate selected users"
+    
+    def deactivate_users(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated} users deactivated.')
+    deactivate_users.short_description = "Deactivate selected users"
 
 @admin.register(ArtistProfile)
 class ArtistProfileAdmin(admin.ModelAdmin):
@@ -30,10 +84,82 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Artwork)
 class ArtworkAdmin(admin.ModelAdmin):
-    list_display = ('title', 'artist', 'artwork_type', 'category', 'price', 'is_available', 'is_featured', 'views_count')
-    list_filter = ('artwork_type', 'is_available', 'is_featured', 'category')
+    list_display = ('title', 'artist', 'artwork_type', 'category', 'price', 'is_available', 'is_featured', 'views_count', 'moderation_status', 'artwork_actions')
+    list_filter = ('artwork_type', 'is_available', 'is_featured', 'category', 'rekognition_checked', 'created_at')
     search_fields = ('title', 'artist__username', 'description')
+    readonly_fields = ('views_count', 'likes_count', 'created_at', 'updated_at', 'rekognition_checked', 'similarity_score')
+    list_editable = ('is_available', 'is_featured')
+    actions = ['feature_artworks', 'unfeature_artworks', 'approve_artworks', 'reject_artworks']
     
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('title', 'description', 'artist', 'category', 'artwork_type', 'price')
+        }),
+        ('Status & Visibility', {
+            'fields': ('is_available', 'is_featured')
+        }),
+        ('Images', {
+            'fields': ('image', 'watermarked_image', 's3_image_url', 's3_watermarked_url')
+        }),
+        ('AI & Moderation', {
+            'fields': ('rekognition_checked', 'rekognition_labels', 'similarity_score'),
+            'classes': ('collapse',)
+        }),
+        ('Statistics', {
+            'fields': ('views_count', 'likes_count'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def moderation_status(self, obj):
+        """Show moderation status with color coding"""
+        if not obj.rekognition_checked:
+            return format_html('<span style="color: orange;">⏳ Pending Review</span>')
+        elif obj.is_available:
+            return format_html('<span style="color: green;">✅ Approved</span>')
+        else:
+            return format_html('<span style="color: red;">❌ Rejected</span>')
+    moderation_status.short_description = 'Status'
+    
+    def artwork_actions(self, obj):
+        """Quick action buttons for artwork management"""
+        actions = []
+        if not obj.is_featured:
+            actions.append(f'<a class="button" href="#" onclick="featureArtwork({obj.id})">Feature</a>')
+        else:
+            actions.append(f'<a class="button" href="#" onclick="unfeatureArtwork({obj.id})">Unfeature</a>')
+        
+        if not obj.is_available:
+            actions.append(f'<a class="button" href="#" onclick="approveArtwork({obj.id})">Approve</a>')
+        else:
+            actions.append(f'<a class="button" href="#" onclick="rejectArtwork({obj.id})">Reject</a>')
+        
+        return mark_safe(' '.join(actions))
+    artwork_actions.short_description = 'Quick Actions'
+    
+    def feature_artworks(self, request, queryset):
+        updated = queryset.update(is_featured=True)
+        self.message_user(request, f'{updated} artworks featured successfully.')
+    feature_artworks.short_description = "Feature selected artworks"
+    
+    def unfeature_artworks(self, request, queryset):
+        updated = queryset.update(is_featured=False)
+        self.message_user(request, f'{updated} artworks unfeatured.')
+    unfeature_artworks.short_description = "Unfeature selected artworks"
+    
+    def approve_artworks(self, request, queryset):
+        updated = queryset.update(is_available=True)
+        self.message_user(request, f'{updated} artworks approved.')
+    approve_artworks.short_description = "Approve selected artworks"
+    
+    def reject_artworks(self, request, queryset):
+        updated = queryset.update(is_available=False)
+        self.message_user(request, f'{updated} artworks rejected.')
+    reject_artworks.short_description = "Reject selected artworks"
     
     def save_model(self, request, obj, form, change):
         # pehle normal save
@@ -83,9 +209,51 @@ class EquipmentOrderItemAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('transaction_id', 'payer', 'payee', 'amount', 'payment_method', 'status', 'created_at')
-    list_filter = ('payment_method', 'status')
+    list_display = ('transaction_id', 'payer', 'payee', 'amount', 'payment_method', 'status', 'hire_status', 'created_at', 'payment_actions')
+    list_filter = ('payment_method', 'status', 'hire_status', 'created_at')
     search_fields = ('transaction_id', 'payer__username', 'payee__username')
+    readonly_fields = ('transaction_id', 'created_at', 'stripe_payment_intent')
+    actions = ['refund_payments', 'release_payments']
+    
+    fieldsets = (
+        ('Payment Details', {
+            'fields': ('transaction_id', 'payer', 'payee', 'amount', 'payment_method')
+        }),
+        ('Status', {
+            'fields': ('status', 'hire_status')
+        }),
+        ('Related Objects', {
+            'fields': ('order', 'job')
+        }),
+        ('Stripe Integration', {
+            'fields': ('stripe_payment_intent',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def payment_actions(self, obj):
+        """Quick action buttons for payment management"""
+        actions = []
+        if obj.status == 'completed' and obj.hire_status == 'pending':
+            actions.append(f'<a class="button" href="#" onclick="releasePayment({obj.id})">Release</a>')
+        if obj.status == 'completed':
+            actions.append(f'<a class="button" href="#" onclick="refundPayment({obj.id})">Refund</a>')
+        return mark_safe(' '.join(actions))
+    payment_actions.short_description = 'Quick Actions'
+    
+    def refund_payments(self, request, queryset):
+        updated = queryset.filter(status='completed').update(status='refunded')
+        self.message_user(request, f'{updated} payments refunded.')
+    refund_payments.short_description = "Refund selected payments"
+    
+    def release_payments(self, request, queryset):
+        updated = queryset.filter(hire_status='pending').update(hire_status='released')
+        self.message_user(request, f'{updated} payments released to artists.')
+    release_payments.short_description = "Release selected payments"
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
@@ -122,9 +290,20 @@ class PlatformAnalyticsAdmin(admin.ModelAdmin):
     ordering = ('-date',)
 
 
-admin.site.site_header = "ArtConnect Admin"
-admin.site.site_title = "ArtConnect Portal"
-admin.site.index_title = "Welcome to ArtConnect Admin"
+# Customize admin site
+admin.site.site_header = "ArtConnect Admin Dashboard"
+admin.site.site_title = "ArtConnect Admin Portal"
+admin.site.index_title = "Welcome to ArtConnect Admin - Comprehensive Management System"
+
+# Add custom CSS and JS
+class AdminConfig:
+    """Custom admin configuration"""
+    
+    class Media:
+        css = {
+            'all': ('admin/css/custom_admin.css',)
+        }
+        js = ('admin/js/custom_admin.js',)
 
 
 
