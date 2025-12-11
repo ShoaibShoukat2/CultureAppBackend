@@ -1,5 +1,7 @@
 # 🎯 CultureUp - Complete API Documentation
 
+**Developed by:** Shoaib Shoukat - Full Stack Engineer
+
 ## 🆕 NEW: AWS S3 Storage & Rekognition Duplicate Detection (Integrated)
 
 ### Features
@@ -408,7 +410,165 @@ Authorization: Token YOUR_TOKEN
 
 ## 🛍️ Buyer Profiles
 
-### 1. Create Buyer Profile
+### 1. List All Buyers
+**Endpoint:** `GET /api/buyer-profiles/`
+
+**Query Parameters:**
+- `search`: Search keyword
+- `ordering`: `total_spent`, `-total_spent`, `projects_posted`, `-projects_posted`
+- `page`: Page number
+- `page_size`: Items per page
+
+**Success Response (200 OK):**
+```json
+{
+    "count": 25,
+    "next": "http://localhost:8000/api/buyer-profiles/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "user": {
+                "id": 21,
+                "username": "buyer_sarah",
+                "email": "sarah@example.com",
+                "first_name": "Sarah",
+                "last_name": "Johnson",
+                "user_type": "buyer",
+                "phone_number": "+923001234567",
+                "is_verified": true,
+                "profile_image": "http://localhost:8000/media/profiles/sarah.jpg",
+                "created_at": "2025-10-12T10:30:00Z"
+            },
+            "company_name": "Tech Innovations Inc",
+            "address": "123 Main Street, Lahore, Pakistan",
+            "total_spent": "15000.00",
+            "projects_posted": 12
+        }
+    ]
+}
+```
+
+---
+
+### 2. Get Buyer Details
+**Endpoint:** `GET /api/buyer-profiles/{user_id}/`
+
+**Example:** `GET /api/buyer-profiles/21/`
+
+**Success Response (200 OK):**
+```json
+{
+    "user": {
+        "id": 21,
+        "username": "buyer_sarah",
+        "email": "sarah@example.com",
+        "first_name": "Sarah",
+        "last_name": "Johnson",
+        "user_type": "buyer",
+        "phone_number": "+923001234567",
+        "is_verified": true,
+        "profile_image": "http://localhost:8000/media/profiles/sarah.jpg",
+        "created_at": "2025-10-12T10:30:00Z"
+    },
+    "company_name": "Tech Innovations Inc",
+    "address": "123 Main Street, Lahore, Pakistan",
+    "total_spent": "15000.00",
+    "projects_posted": 12
+}
+```
+
+---
+
+### 3. Get Buyer Purchases (🆕 NEW)
+**Endpoint:** `GET /api/buyer-profiles/{user_id}/purchases/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Example:** `GET /api/buyer-profiles/21/purchases/`
+
+**Success Response (200 OK):**
+```json
+{
+    "orders": [
+        {
+            "id": 1,
+            "buyer": {
+                "id": 21,
+                "username": "buyer_sarah"
+            },
+            "order_type": "artwork",
+            "status": "completed",
+            "total_amount": "599.98",
+            "shipping_address": "123 Main Street, Lahore, Pakistan",
+            "created_at": "2025-10-10T14:30:00Z",
+            "updated_at": "2025-10-12T16:45:00Z",
+            "artwork_items": [
+                {
+                    "id": 1,
+                    "artwork": 5,
+                    "artwork_title": "Digital Portrait",
+                    "artwork_artist": "artist_john",
+                    "quantity": 1,
+                    "price": "299.99",
+                    "total_price": "299.99"
+                },
+                {
+                    "id": 2,
+                    "artwork": 8,
+                    "artwork_title": "Abstract Landscape",
+                    "artwork_artist": "artist_jane",
+                    "quantity": 1,
+                    "price": "299.99",
+                    "total_price": "299.99"
+                }
+            ],
+            "equipment_items": []
+        }
+    ],
+    "payments": [
+        {
+            "id": 3,
+            "payer": {
+                "id": 21,
+                "username": "buyer_sarah"
+            },
+            "payee": {
+                "id": 1,
+                "username": "artist_john",
+                "first_name": "John",
+                "last_name": "Doe"
+            },
+            "order": null,
+            "job": {
+                "id": 5,
+                "title": "Logo Design for Tech Startup"
+            },
+            "amount": "850.00",
+            "payment_method": "stripe",
+            "status": "completed",
+            "transaction_id": "TXN789456123",
+            "created_at": "2025-10-08T11:20:00Z",
+            "platform_fee": "85.00",
+            "artist_earning": "765.00"
+        }
+    ],
+    "total_orders": 3,
+    "total_payments": 5,
+    "completed_orders": 2,
+    "completed_payments": 4
+}
+```
+
+**Purchase Types Explained:**
+- **Orders**: Purchases of artworks and equipment from the marketplace
+- **Payments**: Payments made to artists for custom job/project work
+
+---
+
+### 4. Create Buyer Profile
 **Endpoint:** `POST /api/buyer-profiles/`
 
 **Headers:**
@@ -431,7 +591,7 @@ Content-Type: application/json
 
 ---
 
-### 2. Update Buyer Profile
+### 5. Update Buyer Profile
 **Endpoint:** `PATCH /api/buyer-profiles/{id}/`
 
 **Request Body:**
@@ -2138,6 +2298,294 @@ curl -X POST http://localhost:8000/api/bids/ \
 - **API Docs**: http://localhost:8000/api/docs/
 - **Swagger UI**: http://localhost:8000/swagger/
 - **ReDoc**: http://localhost:8000/redoc/
+
+---
+
+---
+
+## 📋 Complete API Endpoints Summary
+
+### 🔐 Authentication
+- `POST /api/auth/register/` - Register new user
+- `POST /api/auth/login/` - User login
+- `POST /api/auth/logout/` - User logout
+- `GET /api/auth/profile/` - Get user profile
+- `PUT /api/auth/profile/` - Update user profile
+- `PATCH /api/auth/profile/` - Partial update user profile
+
+### 👨‍🎨 Artist Profiles
+- `GET /api/artist-profiles/` - List all artists
+- `POST /api/artist-profiles/` - Create artist profile
+- `GET /api/artist-profiles/{id}/` - Get artist details
+- `PUT /api/artist-profiles/{id}/` - Update artist profile
+- `PATCH /api/artist-profiles/{id}/` - Partial update artist profile
+- `DELETE /api/artist-profiles/{id}/` - Delete artist profile
+- `GET /api/artist-profiles/{id}/reviews/` - Get artist reviews
+- `GET /api/artist-profiles/{id}/artworks/` - Get artist artworks
+
+### 🛍️ Buyer Profiles
+- `GET /api/buyer-profiles/` - List all buyers
+- `POST /api/buyer-profiles/` - Create buyer profile
+- `GET /api/buyer-profiles/{id}/` - Get buyer details
+- `PUT /api/buyer-profiles/{id}/` - Update buyer profile
+- `PATCH /api/buyer-profiles/{id}/` - Partial update buyer profile
+- `DELETE /api/buyer-profiles/{id}/` - Delete buyer profile
+- `GET /api/buyer-profiles/{id}/purchases/` - **🆕 Get buyer purchases**
+
+### 📂 Categories
+- `GET /api/categories/` - List all categories
+- `GET /api/categories/{id}/` - Get category details
+
+### 🎨 Artworks (with S3 & AI Duplicate Detection)
+- `GET /api/artworks/` - List all artworks
+- `POST /api/artworks/` - **🆕 Create artwork (S3 + AI duplicate check)**
+- `GET /api/artworks/{id}/` - Get artwork details
+- `PUT /api/artworks/{id}/` - **🆕 Update artwork (S3 support)**
+- `PATCH /api/artworks/{id}/` - **🆕 Partial update artwork (S3 support)**
+- `DELETE /api/artworks/{id}/` - **🆕 Delete artwork (S3 cleanup)**
+- `POST /api/artworks/{id}/like/` - Like artwork
+- `GET /api/artworks/featured/` - Get featured artworks
+
+### 💼 Jobs/Projects
+- `GET /api/jobs/` - List all jobs
+- `POST /api/jobs/` - Create job
+- `GET /api/jobs/{id}/` - Get job details
+- `PUT /api/jobs/{id}/` - Update job
+- `PATCH /api/jobs/{id}/` - Partial update job
+- `DELETE /api/jobs/{id}/` - Delete job
+- `GET /api/jobs/{id}/bids/` - Get job bids
+- `POST /api/jobs/{id}/hire/` - Hire artist
+- `POST /api/jobs/{id}/complete/` - Complete job
+
+### 💰 Bids
+- `GET /api/bids/` - List my bids
+- `POST /api/bids/` - Create bid
+- `GET /api/bids/{id}/` - Get bid details
+- `PUT /api/bids/{id}/` - Update bid
+- `PATCH /api/bids/{id}/` - Partial update bid
+- `DELETE /api/bids/{id}/` - Delete bid
+
+### 🛠️ Equipment
+- `GET /api/equipment/` - List all equipment
+- `POST /api/equipment/` - Create equipment
+- `GET /api/equipment/{id}/` - Get equipment details
+- `PUT /api/equipment/{id}/` - Update equipment
+- `PATCH /api/equipment/{id}/` - Partial update equipment
+- `DELETE /api/equipment/{id}/` - Delete equipment
+- `GET /api/equipment/in-stock/` - Get in-stock equipment
+
+### 📦 Orders
+- `GET /api/orders/` - List my orders
+- `POST /api/orders/` - Create order
+- `GET /api/orders/{id}/` - Get order details
+- `PUT /api/orders/{id}/` - Update order
+- `PATCH /api/orders/{id}/` - Partial update order
+- `DELETE /api/orders/{id}/` - Delete order
+- `POST /api/orders/{id}/confirm/` - Confirm order
+- `POST /api/orders/{id}/cancel/` - Cancel order
+
+### 💳 Payments
+- `GET /api/payments/` - List my payments
+- `POST /api/payments/` - Create payment
+- `GET /api/payments/{id}/` - Get payment details
+- `POST /api/payments/{id}/process/` - Process payment
+
+### 💬 Messages
+- `GET /api/messages/` - List my messages
+- `POST /api/messages/` - Send message
+- `GET /api/messages/{id}/` - Get message details
+- `PUT /api/messages/{id}/` - Update message
+- `PATCH /api/messages/{id}/` - Partial update message
+- `DELETE /api/messages/{id}/` - Delete message
+- `POST /api/messages/{id}/mark-read/` - Mark message as read
+- `GET /api/messages/conversations/` - Get conversations
+
+### ⭐ Reviews
+- `GET /api/reviews/` - List reviews
+- `POST /api/reviews/` - Create review
+- `GET /api/reviews/{id}/` - Get review details
+- `PUT /api/reviews/{id}/` - Update review
+- `PATCH /api/reviews/{id}/` - Partial update review
+- `DELETE /api/reviews/{id}/` - Delete review
+
+### 📄 Contracts
+- `GET /api/contracts/` - List my contracts
+- `POST /api/contracts/` - Create contract
+- `GET /api/contracts/{id}/` - Get contract details
+- `PUT /api/contracts/{id}/` - Update contract
+- `PATCH /api/contracts/{id}/` - Partial update contract
+- `DELETE /api/contracts/{id}/` - Delete contract
+- `POST /api/contracts/{id}/sign/` - Sign contract
+
+### 🔔 Notifications
+- `GET /api/notifications/` - List my notifications
+- `GET /api/notifications/{id}/` - Get notification details
+- `POST /api/notifications/{id}/mark-read/` - Mark notification as read
+- `POST /api/notifications/mark-all-read/` - Mark all notifications as read
+- `GET /api/notifications/unread-count/` - Get unread count
+
+### 📊 Analytics (Admin only)
+- `GET /api/analytics/` - List analytics
+- `GET /api/analytics/{id}/` - Get analytics details
+- `POST /api/analytics/calculate-today/` - Calculate today's analytics
+
+### 🔍 Search & Dashboard
+- `GET /api/search/?q=keyword` - Global search
+- `GET /api/dashboard/stats/` - Get dashboard statistics
+
+---
+
+## 🚀 Frontend Implementation Guide
+
+### 1. **Authentication Flow**
+```javascript
+// Register
+const registerUser = async (userData) => {
+  const response = await fetch('/api/auth/register/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData)
+  });
+  return response.json();
+};
+
+// Login
+const loginUser = async (credentials) => {
+  const response = await fetch('/api/auth/login/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials)
+  });
+  const data = await response.json();
+  localStorage.setItem('token', data.token);
+  return data;
+};
+
+// Authenticated requests
+const authHeaders = {
+  'Authorization': `Token ${localStorage.getItem('token')}`,
+  'Content-Type': 'application/json'
+};
+```
+
+### 2. **Buyer Purchases Tab Implementation**
+```javascript
+// Fetch buyer purchases
+const fetchBuyerPurchases = async (buyerId) => {
+  const response = await fetch(`/api/buyer-profiles/${buyerId}/purchases/`, {
+    headers: { 'Authorization': `Token ${localStorage.getItem('token')}` }
+  });
+  return response.json();
+};
+
+// Display purchases in UI
+const displayPurchases = (purchasesData) => {
+  const { orders, payments, total_orders, total_payments } = purchasesData;
+  
+  // Display orders (artwork/equipment purchases)
+  orders.forEach(order => {
+    console.log(`Order #${order.id}: ${order.order_type} - $${order.total_amount}`);
+  });
+  
+  // Display payments (job payments to artists)
+  payments.forEach(payment => {
+    console.log(`Payment #${payment.id}: ${payment.job?.title} - $${payment.amount}`);
+  });
+};
+```
+
+### 3. **Artwork Upload with S3**
+```javascript
+// Upload artwork with automatic S3 storage and duplicate detection
+const uploadArtwork = async (formData) => {
+  const response = await fetch('/api/artworks/', {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
+    body: formData // FormData with image file
+  });
+  
+  const result = await response.json();
+  
+  if (result.duplicate_detected) {
+    alert(`Duplicate detected! Similarity: ${result.similarity_score}%`);
+    return;
+  }
+  
+  console.log('Artwork uploaded successfully:', result.artwork);
+  console.log('AI Labels detected:', result.rekognition_labels);
+};
+```
+
+### 4. **Real-time Features**
+```javascript
+// Fetch unread notifications count
+const getUnreadCount = async () => {
+  const response = await fetch('/api/notifications/unread-count/', {
+    headers: authHeaders
+  });
+  const data = await response.json();
+  updateNotificationBadge(data.unread_count);
+};
+
+// Fetch dashboard stats
+const getDashboardStats = async () => {
+  const response = await fetch('/api/dashboard/stats/', {
+    headers: authHeaders
+  });
+  return response.json();
+};
+```
+
+### 5. **Error Handling**
+```javascript
+const handleApiError = (response) => {
+  if (response.status === 401) {
+    // Redirect to login
+    window.location.href = '/login';
+  } else if (response.status === 403) {
+    alert('You do not have permission to perform this action');
+  } else if (response.status === 400) {
+    // Handle validation errors
+    response.json().then(data => {
+      console.error('Validation errors:', data);
+    });
+  }
+};
+```
+
+---
+
+## 🎯 Key Features for Frontend
+
+### ✅ **Implemented & Ready**
+- **User Authentication** (Register, Login, Profile management)
+- **Artist Profiles** (Complete CRUD, reviews, artworks)
+- **Buyer Profiles** (Complete CRUD, **purchases history**)
+- **Artworks** (S3 storage, AI duplicate detection, watermarking)
+- **Jobs/Projects** (Complete job posting and bidding system)
+- **Orders & Payments** (Complete e-commerce functionality)
+- **Messages** (Real-time messaging system)
+- **Reviews & Ratings** (Complete review system)
+- **Contracts** (Digital contract signing)
+- **Notifications** (Real-time notifications)
+- **Search** (Global search across all content)
+- **Dashboard** (Comprehensive statistics)
+
+### 🆕 **Latest Updates**
+- **Buyer Purchases API** - Complete purchase history
+- **S3 Cloud Storage** - All images stored in AWS S3
+- **AI Duplicate Detection** - Prevents artwork plagiarism
+- **Automatic Watermarking** - Protects artist copyrights
+- **Real-time Statistics** - Live dashboard updates
+
+---
+
+## 📞 Developer Support
+
+**Full Stack Engineer:** Shoaib Shoukat  
+**API Documentation:** Complete and ready for frontend implementation  
+**Testing:** All endpoints tested and functional  
+**Deployment:** Ready for production deployment  
 
 ---
 
