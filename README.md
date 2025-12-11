@@ -2555,73 +2555,966 @@ curl -X POST http://localhost:8000/api/bids/ \
 - `GET /api/search/?q=keyword` - Global search
 - `GET /api/dashboard/stats/` - Get dashboard statistics
 
-### 🛡️ Admin API Endpoints (🆕 NEW)
+## �️ Admin APII Endpoints (🆕 NEW)
 
-#### Dashboard & Analytics
-- `GET /api/admin/dashboard/` - Comprehensive admin dashboard stats
-- `GET /api/admin/revenue-report/` - Detailed revenue report with date filters
+**Base URL:** `http://localhost:8000/api/admin/`
 
-#### User Management
-- `GET /api/admin/users/` - List all users with admin details
-- `POST /api/admin/users/` - Create new user (admin)
-- `GET /api/admin/users/{id}/` - Get user details
-- `PUT /api/admin/users/{id}/` - Update user
-- `DELETE /api/admin/users/{id}/` - Delete user
-- `POST /api/admin/users/{id}/verify/` - Verify user account
-- `POST /api/admin/users/{id}/unverify/` - Unverify user account
-- `POST /api/admin/users/{id}/activate/` - Activate user account
-- `POST /api/admin/users/{id}/deactivate/` - Deactivate user account
-- `POST /api/admin/users/{id}/make-staff/` - Make user staff
-- `POST /api/admin/users/{id}/remove-staff/` - Remove staff privileges
-- `GET /api/admin/users/stats/` - User statistics
-- `POST /api/admin/bulk/users/` - Bulk user actions
+**Authentication Required:** All admin endpoints require admin/staff authentication
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
 
-#### Artwork Management
-- `GET /api/admin/artworks/` - List all artworks with moderation info
-- `GET /api/admin/artworks/{id}/` - Get artwork details
-- `PUT /api/admin/artworks/{id}/` - Update artwork
-- `DELETE /api/admin/artworks/{id}/` - Delete artwork
-- `POST /api/admin/artworks/{id}/feature/` - Feature artwork
-- `POST /api/admin/artworks/{id}/unfeature/` - Unfeature artwork
-- `POST /api/admin/artworks/{id}/approve/` - Approve artwork
-- `POST /api/admin/artworks/{id}/reject/` - Reject artwork
-- `GET /api/admin/artworks/stats/` - Artwork statistics
-- `POST /api/admin/bulk/artworks/` - Bulk artwork actions
+---
 
-#### Job Management
-- `GET /api/admin/jobs/` - List all jobs
-- `GET /api/admin/jobs/{id}/` - Get job details
-- `PUT /api/admin/jobs/{id}/` - Update job
-- `DELETE /api/admin/jobs/{id}/` - Delete job
-- `POST /api/admin/jobs/{id}/close/` - Close job (admin action)
-- `POST /api/admin/jobs/{id}/reopen/` - Reopen job
-- `GET /api/admin/jobs/stats/` - Job statistics
+### 📊 Dashboard & Analytics
 
-#### Payment Management
-- `GET /api/admin/payments/` - List all payments
-- `GET /api/admin/payments/{id}/` - Get payment details
-- `POST /api/admin/payments/{id}/refund/` - Refund payment
-- `POST /api/admin/payments/{id}/release/` - Release hire payment
-- `GET /api/admin/payments/stats/` - Payment statistics
+#### 1. Get Admin Dashboard Statistics
+**Endpoint:** `GET /api/admin/dashboard/`
 
-#### Category & Equipment Management
-- `GET /api/admin/categories/` - List all categories
-- `POST /api/admin/categories/` - Create category
-- `PUT /api/admin/categories/{id}/` - Update category
-- `DELETE /api/admin/categories/{id}/` - Delete category
-- `POST /api/admin/categories/{id}/activate/` - Activate category
-- `POST /api/admin/categories/{id}/deactivate/` - Deactivate category
-- `GET /api/admin/equipment/` - List all equipment
-- `POST /api/admin/equipment/` - Create equipment
-- `PUT /api/admin/equipment/{id}/` - Update equipment
-- `DELETE /api/admin/equipment/{id}/` - Delete equipment
-- `POST /api/admin/equipment/{id}/update-stock/` - Update stock quantity
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
 
-#### Order Management
-- `GET /api/admin/orders/` - List all orders
-- `GET /api/admin/orders/{id}/` - Get order details
-- `POST /api/admin/orders/{id}/force-complete/` - Force complete order
-- `POST /api/admin/orders/{id}/cancel/` - Cancel order (admin)
+**Success Response (200 OK):**
+```json
+{
+    "user_stats": {
+        "total_users": 1250,
+        "new_users_today": 15,
+        "new_users_week": 89,
+        "new_users_month": 342,
+        "verified_users": 1100,
+        "active_users": 1180,
+        "artists": 450,
+        "buyers": 800
+    },
+    "content_stats": {
+        "total_artworks": 3500,
+        "featured_artworks": 150,
+        "pending_artworks": 12,
+        "total_jobs": 890,
+        "open_jobs": 45,
+        "completed_jobs": 720,
+        "total_categories": 8,
+        "active_categories": 7
+    },
+    "financial_stats": {
+        "total_revenue": "125000.50",
+        "revenue_today": "2500.00",
+        "revenue_week": "18750.25",
+        "revenue_month": "45200.80",
+        "pending_payments": 25,
+        "total_orders": 1200,
+        "pending_orders": 8
+    },
+    "activity_stats": {
+        "total_bids": 2340,
+        "pending_bids": 156,
+        "total_messages": 8900,
+        "unread_messages": 234,
+        "total_reviews": 1890,
+        "average_rating": 4.6,
+        "total_contracts": 567,
+        "active_contracts": 89
+    },
+    "recent_activity": {
+        "recent_users": [
+            {
+                "id": 1251,
+                "username": "new_artist_2024",
+                "email": "artist@example.com",
+                "user_type": "artist",
+                "created_at": "2025-12-11T10:30:00Z"
+            }
+        ],
+        "recent_artworks": [
+            {
+                "id": 3501,
+                "title": "Digital Masterpiece",
+                "artist__username": "top_artist",
+                "price": "599.99",
+                "created_at": "2025-12-11T09:15:00Z"
+            }
+        ],
+        "recent_jobs": [
+            {
+                "id": 891,
+                "title": "Logo Design Project",
+                "buyer__username": "startup_buyer",
+                "status": "open",
+                "created_at": "2025-12-11T08:45:00Z"
+            }
+        ],
+        "recent_payments": [
+            {
+                "id": 1201,
+                "transaction_id": "TXN789456123",
+                "payer__username": "buyer_sarah",
+                "payee__username": "artist_john",
+                "amount": "850.00",
+                "status": "completed",
+                "created_at": "2025-12-11T07:20:00Z"
+            }
+        ]
+    },
+    "generated_at": "2025-12-11T12:00:00Z"
+}
+```
+
+---
+
+#### 2. Get Revenue Report
+**Endpoint:** `GET /api/admin/revenue-report/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Query Parameters:**
+- `start_date`: Start date (YYYY-MM-DD format, optional)
+- `end_date`: End date (YYYY-MM-DD format, optional)
+
+**Example Request:**
+```
+GET /api/admin/revenue-report/?start_date=2024-01-01&end_date=2024-12-31
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "date_range": {
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31"
+    },
+    "total_revenue": "125000.50",
+    "total_transactions": 1200,
+    "revenue_by_method": [
+        {
+            "payment_method": "stripe",
+            "total": "75000.30",
+            "count": 720
+        },
+        {
+            "payment_method": "jazzcash",
+            "total": "35000.20",
+            "count": 350
+        },
+        {
+            "payment_method": "bank_transfer",
+            "total": "15000.00",
+            "count": 130
+        }
+    ],
+    "daily_revenue": [
+        {
+            "day": "2024-12-10",
+            "total": "2500.00",
+            "count": 15
+        },
+        {
+            "day": "2024-12-11",
+            "total": "3200.50",
+            "count": 18
+        }
+    ],
+    "top_artists": [
+        {
+            "payee__username": "top_artist_john",
+            "total_earned": "15000.00",
+            "payment_count": 45
+        },
+        {
+            "payee__username": "expert_designer",
+            "total_earned": "12500.50",
+            "payment_count": 38
+        }
+    ],
+    "top_buyers": [
+        {
+            "payer__username": "enterprise_buyer",
+            "total_spent": "25000.00",
+            "payment_count": 67
+        },
+        {
+            "payer__username": "startup_client",
+            "total_spent": "18750.25",
+            "payment_count": 52
+        }
+    ]
+}
+```
+
+---
+
+### 👥 User Management
+
+#### 1. List All Users (Admin View)
+**Endpoint:** `GET /api/admin/users/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Query Parameters:**
+- `user_type`: `artist`, `buyer`, or `admin`
+- `is_verified`: `true` or `false`
+- `is_active`: `true` or `false`
+- `is_staff`: `true` or `false`
+- `search`: Search in username, email, name
+- `ordering`: `created_at`, `-created_at`, `username`, `last_login`
+- `page`: Page number
+- `page_size`: Items per page (default: 50, max: 200)
+
+**Example Request:**
+```
+GET /api/admin/users/?user_type=artist&is_verified=false&ordering=-created_at&page=1
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "count": 450,
+    "next": "http://localhost:8000/api/admin/users/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "username": "artist_john",
+            "email": "john@example.com",
+            "first_name": "John",
+            "last_name": "Doe",
+            "user_type": "artist",
+            "phone_number": "+923001234567",
+            "is_verified": false,
+            "is_active": true,
+            "is_staff": false,
+            "is_superuser": false,
+            "profile_image": "http://localhost:8000/media/profiles/john.jpg",
+            "created_at": "2025-10-12T10:30:00Z",
+            "updated_at": "2025-12-11T08:15:00Z",
+            "last_login": "2025-12-11T07:45:00Z",
+            "total_artworks": 15,
+            "total_jobs_posted": 0,
+            "total_bids": 23,
+            "total_spent": "0.00",
+            "total_earned": "5600.00",
+            "last_activity": "2025-12-11T07:45:00Z"
+        }
+    ]
+}
+```
+
+---
+
+#### 2. Verify User Account
+**Endpoint:** `POST /api/admin/users/{id}/verify/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Example:** `POST /api/admin/users/1/verify/`
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "User artist_john verified successfully",
+    "user": {
+        "id": 1,
+        "username": "artist_john",
+        "is_verified": true,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 3. Activate/Deactivate User
+**Endpoint:** `POST /api/admin/users/{id}/activate/`
+**Endpoint:** `POST /api/admin/users/{id}/deactivate/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "User artist_john activated successfully",
+    "user": {
+        "id": 1,
+        "username": "artist_john",
+        "is_active": true,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 4. Make User Staff
+**Endpoint:** `POST /api/admin/users/{id}/make-staff/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "User artist_john is now staff",
+    "user": {
+        "id": 1,
+        "username": "artist_john",
+        "is_staff": true,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 5. Get User Statistics
+**Endpoint:** `GET /api/admin/users/stats/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "total_users": 1250,
+    "verified_users": 1100,
+    "active_users": 1180,
+    "artists": 450,
+    "buyers": 800,
+    "admins": 5,
+    "staff_users": 12,
+    "recent_registrations": 89
+}
+```
+
+---
+
+#### 6. Bulk User Actions
+**Endpoint:** `POST /api/admin/bulk/users/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "user_ids": [1, 2, 3, 4, 5],
+    "action": "verify"
+}
+```
+
+**Available Actions:**
+- `verify` - Verify selected users
+- `unverify` - Unverify selected users
+- `activate` - Activate selected users
+- `deactivate` - Deactivate selected users
+- `make_staff` - Make selected users staff
+- `remove_staff` - Remove staff privileges
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "5 users verified successfully",
+    "affected_users": 5,
+    "action": "verify",
+    "processed_at": "2025-12-11T12:00:00Z"
+}
+```
+
+---
+
+### 🎨 Artwork Management
+
+#### 1. List All Artworks (Admin View)
+**Endpoint:** `GET /api/admin/artworks/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Query Parameters:**
+- `artwork_type`: `digital`, `physical`, or `mixed`
+- `is_available`: `true` or `false`
+- `is_featured`: `true` or `false`
+- `category`: Category ID
+- `rekognition_checked`: `true` or `false`
+- `search`: Search in title, description, artist name
+- `ordering`: `created_at`, `-created_at`, `price`, `views_count`, `similarity_score`
+- `page`: Page number
+- `page_size`: Items per page
+
+**Example Request:**
+```
+GET /api/admin/artworks/?is_available=false&rekognition_checked=true&ordering=-created_at
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "count": 3500,
+    "next": "http://localhost:8000/api/admin/artworks/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "title": "Digital Masterpiece",
+            "description": "A stunning digital artwork",
+            "artist": 1,
+            "artist_username": "artist_john",
+            "artist_email": "john@example.com",
+            "category": 1,
+            "category_name": "Digital Art",
+            "artwork_type": "digital",
+            "price": "599.99",
+            "is_available": false,
+            "is_featured": true,
+            "views_count": 1250,
+            "likes_count": 89,
+            "created_at": "2025-10-10T15:30:00Z",
+            "updated_at": "2025-12-11T09:15:00Z",
+            "s3_image_url": "https://bucket.s3.amazonaws.com/artworks/1/image.jpg",
+            "s3_watermarked_url": "https://bucket.s3.amazonaws.com/artworks/1/watermarked.jpg",
+            "rekognition_checked": true,
+            "rekognition_labels": [
+                {"name": "Art", "confidence": 99.5},
+                {"name": "Digital", "confidence": 98.2}
+            ],
+            "similarity_score": "15.50",
+            "duplicate_risk": "LOW",
+            "moderation_status": "REJECTED"
+        }
+    ]
+}
+```
+
+---
+
+#### 2. Approve Artwork
+**Endpoint:** `POST /api/admin/artworks/{id}/approve/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Example:** `POST /api/admin/artworks/1/approve/`
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Artwork \"Digital Masterpiece\" approved successfully",
+    "artwork": {
+        "id": 1,
+        "title": "Digital Masterpiece",
+        "is_available": true,
+        "moderation_status": "APPROVED",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 3. Feature Artwork
+**Endpoint:** `POST /api/admin/artworks/{id}/feature/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Artwork \"Digital Masterpiece\" featured successfully",
+    "artwork": {
+        "id": 1,
+        "title": "Digital Masterpiece",
+        "is_featured": true,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 4. Get Artwork Statistics
+**Endpoint:** `GET /api/admin/artworks/stats/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "total_artworks": 3500,
+    "available_artworks": 3200,
+    "featured_artworks": 150,
+    "pending_review": 12,
+    "total_views": 2500000,
+    "total_likes": 45000,
+    "average_price": "425.75",
+    "recent_uploads": 89
+}
+```
+
+---
+
+#### 5. Bulk Artwork Actions
+**Endpoint:** `POST /api/admin/bulk/artworks/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "artwork_ids": [1, 2, 3, 4, 5],
+    "action": "approve"
+}
+```
+
+**Available Actions:**
+- `approve` - Approve selected artworks
+- `reject` - Reject selected artworks
+- `feature` - Feature selected artworks
+- `unfeature` - Unfeature selected artworks
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "5 artworks approved successfully",
+    "affected_artworks": 5,
+    "action": "approve",
+    "processed_at": "2025-12-11T12:00:00Z"
+}
+```
+
+---
+
+### 💼 Job Management
+
+#### 1. List All Jobs (Admin View)
+**Endpoint:** `GET /api/admin/jobs/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Query Parameters:**
+- `status`: `open`, `in_progress`, `completed`, or `cancelled`
+- `experience_level`: `entry`, `intermediate`, or `expert`
+- `category`: Category ID
+- `search`: Search in title, description, buyer name
+- `ordering`: `created_at`, `-created_at`, `budget_min`, `deadline`
+- `page`: Page number
+- `page_size`: Items per page
+
+**Success Response (200 OK):**
+```json
+{
+    "count": 890,
+    "next": "http://localhost:8000/api/admin/jobs/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 5,
+            "title": "Logo Design for Tech Startup",
+            "description": "Need a modern, minimalist logo design...",
+            "buyer": 2,
+            "buyer_username": "startup_buyer",
+            "buyer_email": "buyer@startup.com",
+            "hired_artist": 1,
+            "hired_artist_username": "artist_john",
+            "category": 2,
+            "category_name": "Graphic Design",
+            "budget_min": "500.00",
+            "budget_max": "1000.00",
+            "duration_days": 7,
+            "required_skills": "Logo Design, Branding",
+            "experience_level": "expert",
+            "status": "in_progress",
+            "final_amount": "750.00",
+            "deadline": "2025-12-20T23:59:59Z",
+            "created_at": "2025-12-05T08:00:00Z",
+            "updated_at": "2025-12-10T14:30:00Z",
+            "total_bids": 8,
+            "average_bid": "725.50",
+            "days_since_posted": 6,
+            "days_until_deadline": 9
+        }
+    ]
+}
+```
+
+---
+
+#### 2. Close Job (Admin Action)
+**Endpoint:** `POST /api/admin/jobs/{id}/close/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Job \"Logo Design for Tech Startup\" closed by admin",
+    "job": {
+        "id": 5,
+        "title": "Logo Design for Tech Startup",
+        "status": "cancelled",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 3. Get Job Statistics
+**Endpoint:** `GET /api/admin/jobs/stats/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "total_jobs": 890,
+    "open_jobs": 45,
+    "in_progress_jobs": 89,
+    "completed_jobs": 720,
+    "cancelled_jobs": 36,
+    "average_budget": {
+        "avg_min": "425.75",
+        "avg_max": "850.50"
+    },
+    "total_bids": 2340,
+    "recent_jobs": 23
+}
+```
+
+---
+
+### 💳 Payment Management
+
+#### 1. List All Payments (Admin View)
+**Endpoint:** `GET /api/admin/payments/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Query Parameters:**
+- `payment_method`: `stripe`, `jazzcash`, `bank_transfer`, `cash_on_delivery`
+- `status`: `pending`, `completed`, `failed`, `refunded`
+- `hire_status`: `pending`, `released`, `cancelled`
+- `search`: Search in transaction ID, payer, payee
+- `ordering`: `created_at`, `-created_at`, `amount`
+- `page`: Page number
+- `page_size`: Items per page
+
+**Success Response (200 OK):**
+```json
+{
+    "count": 1200,
+    "next": "http://localhost:8000/api/admin/payments/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "transaction_id": "TXN789456123",
+            "payer": 2,
+            "payer_username": "buyer_sarah",
+            "payee": 1,
+            "payee_username": "artist_john",
+            "order": null,
+            "job": 5,
+            "job_title": "Logo Design for Tech Startup",
+            "amount": "750.00",
+            "payment_method": "stripe",
+            "status": "completed",
+            "hire_status": "pending",
+            "stripe_payment_intent": "pi_1234567890",
+            "created_at": "2025-12-10T14:30:00Z",
+            "platform_fee": "75.00",
+            "artist_earning": "675.00",
+            "days_since_payment": 1
+        }
+    ]
+}
+```
+
+---
+
+#### 2. Release Payment to Artist
+**Endpoint:** `POST /api/admin/payments/{id}/release/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Payment TXN789456123 released to artist",
+    "payment": {
+        "id": 1,
+        "transaction_id": "TXN789456123",
+        "hire_status": "released",
+        "artist_earning": "675.00",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 3. Process Refund
+**Endpoint:** `POST /api/admin/payments/{id}/refund/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Payment TXN789456123 refunded successfully",
+    "payment": {
+        "id": 1,
+        "transaction_id": "TXN789456123",
+        "status": "refunded",
+        "refund_amount": "750.00",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 4. Get Payment Statistics
+**Endpoint:** `GET /api/admin/payments/stats/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "total_payments": 1200,
+    "completed_payments": 1050,
+    "pending_payments": 120,
+    "failed_payments": 25,
+    "refunded_payments": 5,
+    "total_revenue": "125000.50",
+    "platform_fees": "12500.05",
+    "pending_releases": 89
+}
+```
+
+---
+
+### 📂 Category Management
+
+#### 1. Create Category
+**Endpoint:** `POST /api/admin/categories/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "name": "3D Modeling",
+    "description": "3D modeling and rendering services",
+    "is_active": true
+}
+```
+
+**Success Response (201 Created):**
+```json
+{
+    "id": 9,
+    "name": "3D Modeling",
+    "description": "3D modeling and rendering services",
+    "is_active": true,
+    "created_at": "2025-12-11T12:00:00Z"
+}
+```
+
+---
+
+#### 2. Activate/Deactivate Category
+**Endpoint:** `POST /api/admin/categories/{id}/activate/`
+**Endpoint:** `POST /api/admin/categories/{id}/deactivate/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Category \"3D Modeling\" activated successfully",
+    "category": {
+        "id": 9,
+        "name": "3D Modeling",
+        "is_active": true,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+### 🛠️ Equipment Management
+
+#### 1. Update Equipment Stock
+**Endpoint:** `POST /api/admin/equipment/{id}/update-stock/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "stock_quantity": 75
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Stock updated for \"Professional Brush Set\"",
+    "equipment": {
+        "id": 1,
+        "name": "Professional Brush Set",
+        "stock_quantity": 75,
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+### 📦 Order Management
+
+#### 1. Force Complete Order
+**Endpoint:** `POST /api/admin/orders/{id}/force-complete/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Order #1 marked as delivered by admin",
+    "order": {
+        "id": 1,
+        "status": "delivered",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+#### 2. Cancel Order (Admin Action)
+**Endpoint:** `POST /api/admin/orders/{id}/cancel/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ADMIN_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "Order #1 cancelled by admin",
+    "order": {
+        "id": 1,
+        "status": "cancelled",
+        "updated_at": "2025-12-11T12:00:00Z"
+    }
+}
+```
+
+---
+
+### ⚠️ Admin Error Responses
+
+**401 Unauthorized:**
+```json
+{
+    "detail": "Invalid token or authentication credentials not provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+    "detail": "You do not have permission to perform this action. Admin access required."
+}
+```
+
+**404 Not Found:**
+```json
+{
+    "detail": "User not found"
+}
+```
+
+**400 Bad Request:**
+```json
+{
+    "error": "Invalid action specified",
+    "available_actions": ["verify", "unverify", "activate", "deactivate", "make_staff", "remove_staff"]
+}
+```
 
 ---
 
