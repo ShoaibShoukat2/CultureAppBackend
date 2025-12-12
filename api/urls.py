@@ -105,6 +105,9 @@ urlpatterns = [
     path('contracts/<int:pk>/sign/', 
          ContractViewSet.as_view({'post': 'sign'}), 
          name='sign-contract'),
+    path('contracts/<int:pk>/terminate/', 
+         ContractViewSet.as_view({'post': 'terminate'}), 
+         name='terminate-contract'),
     
     # ===== Notification Custom Actions =====
     path('notifications/<int:pk>/mark-read/', 
@@ -243,6 +246,7 @@ CONTRACTS:
 - PATCH  /api/contracts/{id}/
 - DELETE /api/contracts/{id}/
 - POST   /api/contracts/{id}/sign/
+- POST   /api/contracts/{id}/terminate/
 
 NOTIFICATIONS:
 - GET    /api/notifications/

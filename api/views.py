@@ -14,7 +14,7 @@ from django.utils import timezone
 from .models import *
 from .serializers import *
 from .permissions import IsOwnerOrReadOnly, IsArtistOrReadOnly, IsBuyerOrReadOnly
-from api.notifications.utils import send_notification_email
+from api.notifications.utils import send_notification_email, send_contract_notification_email
 
 
 # Payment Views
@@ -749,6 +749,10 @@ class JobViewSet(ModelViewSet):
                 deadline=timezone.now() + timezone.timedelta(days=bid.delivery_time),
                 status='pending'
             )
+            
+            # Email notifications about contract creation to both parties
+            send_contract_notification_email(contract, 'created', 'artist')
+            send_contract_notification_email(contract, 'created', 'buyer')
 
             # --------------------------------------------------
             #                NOTIFICATIONS (APP)
@@ -835,6 +839,18 @@ class JobViewSet(ModelViewSet):
         # Update job status
         job.status = 'completed'
         job.save()
+        
+        # Update contract status to completed
+        try:
+            contract = job.contract
+            contract.status = 'completed'
+            contract.save()
+            
+            # Send contract completion emails
+            send_contract_notification_email(contract, 'completed', 'artist')
+            send_contract_notification_email(contract, 'completed', 'buyer')
+        except Contract.DoesNotExist:
+            pass  # No contract exists for this job
         
         # Release payment
         payment = Payment.objects.filter(job=job, payer=request.user, payee=job.hired_artist).first()
@@ -1337,13 +1353,74 @@ class ContractViewSet(ModelViewSet):
         
         if user == contract.artist and not contract.artist_signed:
             contract.sign_by_artist()
-            return Response({'message': 'Contract signed by artist'})
+            
+            # Email to buyer about artist signing
+            send_contract_notification_email(contract, 'signed_by_artist', 'buyer')
+            
+            # Check if contract is now fully signed
+            if contract.is_fully_signed():
+                # Email to both parties about contract activation
+                send_contract_notification_email(contract, 'activated', 'artist')
+                send_contract_notification_email(contract, 'activated', 'buyer')
+            
+            return Response({
+                'message': 'Contract signed by artist',
+                'contract_status': contract.status,
+                'is_fully_signed': contract.is_fully_signed()
+            })
+            
         elif user == contract.buyer and not contract.buyer_signed:
             contract.sign_by_buyer()
-            return Response({'message': 'Contract signed by buyer'})
+            
+            # Email to artist about buyer signing
+            send_contract_notification_email(contract, 'signed_by_buyer', 'artist')
+            
+            # Check if contract is now fully signed
+            if contract.is_fully_signed():
+                # Email to both parties about contract activation
+                send_contract_notification_email(contract, 'activated', 'artist')
+                send_contract_notification_email(contract, 'activated', 'buyer')
+            
+            return Response({
+                'message': 'Contract signed by buyer',
+                'contract_status': contract.status,
+                'is_fully_signed': contract.is_fully_signed()
+            })
+            
         else:
             return Response({'error': 'Cannot sign contract'}, status=status.HTTP_400_BAD_REQUEST)
    
+    @action(detail=True, methods=['post'])
+    def terminate(self, request, pk=None):
+        """Terminate a contract"""
+        contract = self.get_object()
+        user = request.user
+        
+        # Only allow termination by contract parties and if contract is active
+        if user not in [contract.artist, contract.buyer]:
+            return Response({'error': 'Not authorized to terminate this contract'}, status=status.HTTP_403_FORBIDDEN)
+        
+        if contract.status not in ['active', 'pending']:
+            return Response({'error': 'Contract cannot be terminated in current status'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update contract status
+        contract.status = 'terminated'
+        contract.save()
+        
+        # Update related job status if exists
+        if hasattr(contract, 'job') and contract.job.status == 'in_progress':
+            contract.job.status = 'cancelled'
+            contract.job.save()
+        
+        # Send termination emails to both parties
+        send_contract_notification_email(contract, 'terminated', 'artist')
+        send_contract_notification_email(contract, 'terminated', 'buyer')
+        
+        return Response({
+            'message': 'Contract terminated successfully',
+            'contract_status': contract.status,
+            'terminated_by': user.username
+        })
     
 # Notification Views
 class NotificationViewSet(ReadOnlyModelViewSet):

@@ -35,7 +35,7 @@ SECRET_KEY = 'django-insecure-z=*+m#o7jyi79jzt=5w#=7ha(+)z4snfyt&qx!z5u5mveoo96&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'ShoaibAhmad.pythonanywhere.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'ShoaibAhmad.pythonanywhere.com']
 
 
 # Application definition
@@ -185,8 +185,12 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
     "http://localhost:5173",
-    "https://ShoaibAhmad.pythonanywhere.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "https://shoaibahmad.pythonanywhere.com",
 ]
 
 
