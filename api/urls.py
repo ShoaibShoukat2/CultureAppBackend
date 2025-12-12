@@ -3,6 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import *
 from .admin_urls import admin_urlpatterns
+from . import email_views
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -124,6 +125,20 @@ urlpatterns = [
     path('analytics/calculate-today/', 
          PlatformAnalyticsViewSet.as_view({'post': 'calculate_today'}), 
          name='calculate-today-analytics'),
+    
+    # ===== EMAIL TESTING ROUTES (Admin only) =====
+    path('email/test-connection/', 
+         email_views.test_email_connection, 
+         name='test-email-connection'),
+    path('email/send-order/', 
+         email_views.send_order_email, 
+         name='send-order-email'),
+    path('email/send-payment/', 
+         email_views.send_payment_email, 
+         name='send-payment-email'),
+    path('email/settings/', 
+         email_views.email_settings_info, 
+         name='email-settings'),
     
     # ===== ADMIN ROUTES =====
     path('admin/', include(admin_urlpatterns)),

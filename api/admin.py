@@ -2,11 +2,13 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.contrib import messages
 from .models import (
     CustomUser, ArtistProfile, BuyerProfile, Category, Artwork,
     Job, Bid, Equipment, Order, ArtworkOrderItem, EquipmentOrderItem,
     Payment, Message, Review, Contract, Notification, PlatformAnalytics
 )
+from .email_service import EmailService
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
@@ -193,9 +195,46 @@ class EquipmentAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'buyer', 'order_type', 'status', 'total_amount', 'created_at')
+    list_display = ('id', 'buyer', 'order_type', 'status', 'total_amount', 'created_at', 'email_actions')
     list_filter = ('order_type', 'status')
     search_fields = ('buyer__username',)
+    actions = ['send_order_confirmation_emails', 'send_status_update_emails']
+    
+    def email_actions(self, obj):
+        """Email action buttons"""
+        actions = []
+        actions.append(f'<a class="button" href="#" onclick="sendOrderEmail({obj.id})">Send Confirmation</a>')
+        return mark_safe(' '.join(actions))
+    email_actions.short_description = 'Email Actions'
+    
+    def send_order_confirmation_emails(self, request, queryset):
+        """Admin action to manually send order confirmation emails"""
+        count = 0
+        for order in queryset:
+            if EmailService.send_purchase_confirmation(order):
+                count += 1
+        messages.success(request, f'Successfully sent {count} order confirmation emails.')
+    send_order_confirmation_emails.short_description = "Send order confirmation emails"
+    
+    def send_status_update_emails(self, request, queryset):
+        """Admin action to send status update emails"""
+        count = 0
+        for order in queryset:
+            if EmailService.send_order_status_update(order, 'pending', order.status):
+                count += 1
+        messages.success(request, f'Successfully sent {count} status update emails.')
+    send_status_update_emails.short_description = "Send status update emails"
+    
+    def save_model(self, request, obj, form, change):
+        # Track status changes
+        if change:
+            try:
+                old_obj = Order.objects.get(pk=obj.pk)
+                if old_obj.status != obj.status:
+                    obj._old_status = old_obj.status
+            except Order.DoesNotExist:
+                pass
+        super().save_model(request, obj, form, change)
 
 @admin.register(ArtworkOrderItem)
 class ArtworkOrderItemAdmin(admin.ModelAdmin):
@@ -213,7 +252,7 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ('payment_method', 'status', 'hire_status', 'created_at')
     search_fields = ('transaction_id', 'payer__username', 'payee__username')
     readonly_fields = ('transaction_id', 'created_at', 'stripe_payment_intent')
-    actions = ['refund_payments', 'release_payments']
+    actions = ['refund_payments', 'release_payments', 'send_payment_confirmation_emails']
     
     fieldsets = (
         ('Payment Details', {
@@ -242,6 +281,7 @@ class PaymentAdmin(admin.ModelAdmin):
             actions.append(f'<a class="button" href="#" onclick="releasePayment({obj.id})">Release</a>')
         if obj.status == 'completed':
             actions.append(f'<a class="button" href="#" onclick="refundPayment({obj.id})">Refund</a>')
+        actions.append(f'<a class="button" href="#" onclick="sendPaymentEmail({obj.id})">Send Email</a>')
         return mark_safe(' '.join(actions))
     payment_actions.short_description = 'Quick Actions'
     
@@ -254,6 +294,15 @@ class PaymentAdmin(admin.ModelAdmin):
         updated = queryset.filter(hire_status='pending').update(hire_status='released')
         self.message_user(request, f'{updated} payments released to artists.')
     release_payments.short_description = "Release selected payments"
+    
+    def send_payment_confirmation_emails(self, request, queryset):
+        """Admin action to manually send payment confirmation emails"""
+        count = 0
+        for payment in queryset:
+            if EmailService.send_payment_confirmation(payment):
+                count += 1
+        messages.success(request, f'Successfully sent {count} payment confirmation emails.')
+    send_payment_confirmation_emails.short_description = "Send payment confirmation emails"
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):

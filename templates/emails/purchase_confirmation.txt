@@ -1,0 +1,46 @@
+PURCHASE CONFIRMATION - CultureUp
+=====================================
+
+Hello {{ buyer_name }},
+
+Your order has been successfully placed! Here are the details:
+
+ORDER INFORMATION
+-----------------
+Order ID: #{{ order_id }}
+Order Date: {{ order_date }}
+Status: {{ order_status }}
+Order Type: {{ order_type }}
+
+ITEMS PURCHASED
+---------------
+{% if artwork_items %}
+Artworks:
+{% for item in artwork_items %}
+- {{ item.artwork.title }} by {{ item.artwork.artist.username }}
+  Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}
+{% endfor %}
+{% endif %}
+
+{% if equipment_items %}
+Equipment:
+{% for item in equipment_items %}
+- {{ item.equipment.name }}
+  Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}
+{% endfor %}
+{% endif %}
+
+PAYMENT & SHIPPING
+------------------
+Total Amount: ${{ total_amount }}
+Shipping Address: {{ shipping_address }}
+
+WHAT'S NEXT?
+------------
+- We'll process your order within 24 hours
+- You'll receive a shipping confirmation email once your order is dispatched
+- Track your order status in your account dashboard
+
+Thank you for choosing CultureUp!
+
+If you have any questions, contact us at support@cultureup.com

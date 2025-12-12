@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Purchase Confirmation - CultureUp</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .order-details { background: white; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        .item { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .total { font-weight: bold; font-size: 18px; color: #4CAF50; }
+        .footer { text-align: center; padding: 20px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Purchase Confirmed!</h1>
+            <p>Thank you for your order</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hello {{ buyer_name }},</h2>
+            <p>Your order has been successfully placed! Here are the details:</p>
+            
+            <div class="order-details">
+                <h3>Order Information</h3>
+                <p><strong>Order ID:</strong> #{{ order_id }}</p>
+                <p><strong>Order Date:</strong> {{ order_date }}</p>
+                <p><strong>Status:</strong> {{ order_status }}</p>
+                <p><strong>Order Type:</strong> {{ order_type }}</p>
+            </div>
+            
+            <div class="order-details">
+                <h3>Items Purchased</h3>
+                {% if artwork_items %}
+                    <h4>Artworks:</h4>
+                    {% for item in artwork_items %}
+                    <div class="item">
+                        <p><strong>{{ item.artwork.title }}</strong> by {{ item.artwork.artist.username }}</p>
+                        <p>Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}</p>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                
+                {% if equipment_items %}
+                    <h4>Equipment:</h4>
+                    {% for item in equipment_items %}
+                    <div class="item">
+                        <p><strong>{{ item.equipment.name }}</strong></p>
+                        <p>Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}</p>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            
+            <div class="order-details">
+                <h3>Payment & Shipping</h3>
+                <p><strong>Total Amount:</strong> <span class="total">${{ total_amount }}</span></p>
+                <p><strong>Shipping Address:</strong><br>{{ shipping_address }}</p>
+            </div>
+            
+            <div class="order-details">
+                <h3>What's Next?</h3>
+                <ul>
+                    <li>We'll process your order within 24 hours</li>
+                    <li>You'll receive a shipping confirmation email once your order is dispatched</li>
+                    <li>Track your order status in your account dashboard</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for choosing CultureUp!</p>
+            <p>If you have any questions, contact us at support@cultureup.com</p>
+        </div>
+    </div>
+</body>
+</html>
