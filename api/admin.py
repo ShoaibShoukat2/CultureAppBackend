@@ -87,9 +87,9 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Artwork)
 class ArtworkAdmin(admin.ModelAdmin):
     list_display = ('title', 'artist', 'artwork_type', 'category', 'price', 'is_available', 'is_featured', 'views_count', 'moderation_status', 'artwork_actions')
-    list_filter = ('artwork_type', 'is_available', 'is_featured', 'category', 'rekognition_checked', 'created_at')
+    list_filter = ('artwork_type', 'is_available', 'is_featured', 'category', 'created_at')
     search_fields = ('title', 'artist__username', 'description')
-    readonly_fields = ('views_count', 'likes_count', 'created_at', 'updated_at', 'rekognition_checked', 'similarity_score')
+    readonly_fields = ('views_count', 'likes_count', 'created_at', 'updated_at')
     list_editable = ('is_available', 'is_featured')
     actions = ['feature_artworks', 'unfeature_artworks', 'approve_artworks', 'reject_artworks']
     
@@ -101,11 +101,7 @@ class ArtworkAdmin(admin.ModelAdmin):
             'fields': ('is_available', 'is_featured')
         }),
         ('Images', {
-            'fields': ('image', 'watermarked_image', 's3_image_url', 's3_watermarked_url')
-        }),
-        ('AI & Moderation', {
-            'fields': ('rekognition_checked', 'rekognition_labels', 'similarity_score'),
-            'classes': ('collapse',)
+            'fields': ('image', 'watermarked_image')
         }),
         ('Statistics', {
             'fields': ('views_count', 'likes_count'),
@@ -119,9 +115,7 @@ class ArtworkAdmin(admin.ModelAdmin):
     
     def moderation_status(self, obj):
         """Show moderation status with color coding"""
-        if not obj.rekognition_checked:
-            return format_html('<span style="color: orange;">⏳ Pending Review</span>')
-        elif obj.is_available:
+        if obj.is_available:
             return format_html('<span style="color: green;">✅ Approved</span>')
         else:
             return format_html('<span style="color: red;">❌ Rejected</span>')

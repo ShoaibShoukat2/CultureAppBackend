@@ -95,9 +95,8 @@ class AdminArtworkSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'artist', 'artist_username', 
             'artist_email', 'category', 'category_name', 'artwork_type',
             'price', 'is_available', 'is_featured', 'views_count', 
-            'likes_count', 'created_at', 'updated_at', 's3_image_url',
-            's3_watermarked_url', 'rekognition_checked', 'rekognition_labels',
-            'similarity_score', 'duplicate_risk', 'moderation_status'
+            'likes_count', 'created_at', 'updated_at', 'image',
+            'watermarked_image', 'moderation_status'
         ]
 
     def get_duplicate_risk(self, obj):
@@ -110,9 +109,7 @@ class AdminArtworkSerializer(serializers.ModelSerializer):
         return 'NONE'
 
     def get_moderation_status(self, obj):
-        if not obj.rekognition_checked:
-            return 'PENDING_REVIEW'
-        elif obj.is_available:
+        if obj.is_available:
             return 'APPROVED'
         else:
             return 'REJECTED'

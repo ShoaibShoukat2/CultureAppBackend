@@ -137,20 +137,9 @@ class Artwork(models.Model):
     artwork_type = models.CharField(max_length=20, choices=ARTWORK_TYPES, default='digital')
     price = models.DecimalField(max_digits=10, decimal_places=2)
     
-    # S3 Storage fields (new)
-    s3_image_key = models.CharField(max_length=500, blank=True, null=True, help_text="S3 object key for original image")
-    s3_image_url = models.URLField(max_length=1000, blank=True, null=True, help_text="S3 URL for original image")
-    s3_watermarked_key = models.CharField(max_length=500, blank=True, null=True, help_text="S3 object key for watermarked image")
-    s3_watermarked_url = models.URLField(max_length=1000, blank=True, null=True, help_text="S3 URL for watermarked image")
-    
-    # Legacy local storage fields (kept for backward compatibility)
-    image = models.ImageField(upload_to='artworks/', blank=True, null=True)
+    # Image storage fields
+    image = models.ImageField(upload_to='artworks/')
     watermarked_image = models.ImageField(upload_to='watermarked_artworks/', blank=True, null=True)
-    
-    # Rekognition metadata
-    rekognition_checked = models.BooleanField(default=False, help_text="Whether artwork was checked for duplicates")
-    rekognition_labels = models.JSONField(blank=True, null=True, help_text="Detected labels from Rekognition")
-    similarity_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Highest similarity score with existing artworks")
     
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
@@ -191,7 +180,13 @@ class Artwork(models.Model):
             # first determine text size
             dummy = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
             dummydraw = ImageDraw.Draw(dummy)
-            text_w, text_h = dummydraw.textsize(txt, font=font)
+            
+            try:
+                bbox = dummydraw.textbbox((0, 0), txt, font=font)
+                text_w = bbox[2] - bbox[0]
+                text_h = bbox[3] - bbox[1]
+            except AttributeError:
+                text_w, text_h = dummydraw.textsize(txt, font=font)
 
             padding = int(font_size * 0.4)
             text_img = Image.new("RGBA", (text_w + padding * 2, text_h + padding * 2), (0, 0, 0, 0))

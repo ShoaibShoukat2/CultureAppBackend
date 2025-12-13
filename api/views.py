@@ -215,17 +215,11 @@ class CategoryViewSet(ReadOnlyModelViewSet):
   
     
 
-# Artwork Views with S3 & Rekognition
-from .aws_services.s3_storage import S3StorageService
-from .aws_services.rekognition_service import RekognitionService
+# Artwork Views
 from rest_framework.parsers import MultiPartParser, FormParser
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
-import tempfile
-import os
 
 class ArtworkViewSet(ModelViewSet):
-    """Artwork CRUD operations with S3 Storage & Rekognition Duplicate Detection"""
+    """Artwork CRUD operations"""
     queryset = Artwork.objects.select_related('artist', 'category').filter(is_available=True)
     serializer_class = ArtworkSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -265,7 +259,7 @@ class ArtworkViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def create(self, request, *args, **kwargs):
-        """Create artwork with S3 upload and duplicate detection"""
+        """Create artwork with local file upload"""
         # Validate user is artist
         if request.user.user_type != 'artist':
             return Response(
@@ -273,116 +267,19 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Get uploaded image
-        image_file = request.FILES.get('image')
-        if not image_file:
-            return Response(
-                {'error': 'Image file is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Create artwork
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         
-        try:
-            # Initialize AWS services
-            s3_service = S3StorageService()
-            rekognition_service = RekognitionService()
-            
-            # Upload to S3
-            upload_result = s3_service.upload_artwork(
-                image_file,
-                request.user.id,
-                image_file.name
-            )
-            
-            if not upload_result['success']:
-                return Response(
-                    {'error': f"S3 upload failed: {upload_result.get('error')}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-            s3_key = upload_result['s3_key']
-            s3_url = upload_result['s3_url']
-            
-            # Get existing artworks for duplicate check
-            existing_artworks = Artwork.objects.filter(
-                rekognition_checked=True
-            ).exclude(
-                artist=request.user  # Allow same artist variations
-            ).values_list('s3_image_key', flat=True)
-            
-            existing_keys = [key for key in existing_artworks if key]
-            
-            # Check for duplicates
-            if existing_keys:
-                duplicate_check = rekognition_service.check_duplicate_artwork(
-                    s3_key,
-                    existing_keys
-                )
-                
-                if duplicate_check['duplicate_found']:
-                    # Delete uploaded image
-                    s3_service.delete_artwork(s3_key)
-                    
-                    matched_key = duplicate_check['matched_artwork']
-                    matched_artwork = Artwork.objects.filter(s3_image_key=matched_key).first()
-                    
-                    return Response({
-                        'error': 'Duplicate artwork detected',
-                        'message': 'This artwork is too similar to an existing artwork',
-                        'duplicate_detected': True,
-                        'similarity_score': duplicate_check['similarity_score'],
-                        'matched_artwork': {
-                            'id': matched_artwork.id if matched_artwork else None,
-                            'title': matched_artwork.title if matched_artwork else 'Unknown',
-                            'artist': matched_artwork.artist.username if matched_artwork else 'Unknown'
-                        }
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Get Rekognition labels
-            labels_result = rekognition_service.detect_labels(s3_key)
-            detected_labels = labels_result.get('labels', [])
-            
-            # Generate watermark
-            image_file.seek(0)
-            watermarked_result = self._generate_and_upload_watermark(
-                image_file,
-                request.user.id,
-                s3_service
-            )
-            
-            # Create artwork
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            
-            artwork = serializer.save(
-                artist=request.user,
-                s3_image_key=s3_key,
-                s3_image_url=s3_url,
-                s3_watermarked_key=watermarked_result.get('s3_key'),
-                s3_watermarked_url=watermarked_result.get('s3_url'),
-                rekognition_checked=True,
-                rekognition_labels=detected_labels,
-                similarity_score=0.0
-            )
-            
-            return Response({
-                'message': 'Artwork uploaded successfully',
-                'artwork': ArtworkSerializer(artwork).data,
-                'duplicate_check': {
-                    'checked': True,
-                    'total_compared': len(existing_keys),
-                    'duplicate_found': False
-                },
-                'rekognition_labels': detected_labels
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            return Response(
-                {'error': f'Upload failed: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        artwork = serializer.save(artist=request.user)
+        
+        return Response({
+            'message': 'Artwork uploaded successfully',
+            'artwork': ArtworkSerializer(artwork).data
+        }, status=status.HTTP_201_CREATED)
     
     def update(self, request, *args, **kwargs):
-        """Update artwork with S3 support"""
+        """Update artwork"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
@@ -393,88 +290,7 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Check if new image uploaded
-        new_image = request.FILES.get('image')
-        
-        if new_image:
-            try:
-                s3_service = S3StorageService()
-                rekognition_service = RekognitionService()
-                
-                # Delete old S3 images
-                if instance.s3_image_key:
-                    s3_service.delete_artwork(instance.s3_image_key)
-                if instance.s3_watermarked_key:
-                    s3_service.delete_artwork(instance.s3_watermarked_key)
-                
-                # Upload new image
-                upload_result = s3_service.upload_artwork(
-                    new_image,
-                    request.user.id,
-                    new_image.name
-                )
-                
-                if not upload_result['success']:
-                    return Response(
-                        {'error': f"S3 upload failed: {upload_result.get('error')}"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-                
-                s3_key = upload_result['s3_key']
-                s3_url = upload_result['s3_url']
-                
-                # Check duplicates (exclude current artwork)
-                existing_artworks = Artwork.objects.filter(
-                    rekognition_checked=True
-                ).exclude(
-                    id=instance.id
-                ).exclude(
-                    artist=request.user
-                ).values_list('s3_image_key', flat=True)
-                
-                existing_keys = [key for key in existing_artworks if key]
-                
-                if existing_keys:
-                    duplicate_check = rekognition_service.check_duplicate_artwork(
-                        s3_key,
-                        existing_keys
-                    )
-                    
-                    if duplicate_check['duplicate_found']:
-                        s3_service.delete_artwork(s3_key)
-                        return Response({
-                            'error': 'Duplicate artwork detected',
-                            'similarity_score': duplicate_check['similarity_score']
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Get labels
-                labels_result = rekognition_service.detect_labels(s3_key)
-                detected_labels = labels_result.get('labels', [])
-                
-                # Generate watermark
-                new_image.seek(0)
-                watermarked_result = self._generate_and_upload_watermark(
-                    new_image,
-                    request.user.id,
-                    s3_service
-                )
-                
-                # Update instance
-                instance.s3_image_key = s3_key
-                instance.s3_image_url = s3_url
-                instance.s3_watermarked_key = watermarked_result.get('s3_key')
-                instance.s3_watermarked_url = watermarked_result.get('s3_url')
-                instance.rekognition_checked = True
-                instance.rekognition_labels = detected_labels
-                instance.save()
-                
-            except Exception as e:
-                return Response(
-                    {'error': f'Update failed: {str(e)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-        
-        # Update other fields
+        # Update fields
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -485,7 +301,7 @@ class ArtworkViewSet(ModelViewSet):
         })
     
     def destroy(self, request, *args, **kwargs):
-        """Delete artwork and remove from S3"""
+        """Delete artwork"""
         instance = self.get_object()
         
         # Check ownership
@@ -495,116 +311,14 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            # Delete from S3
-            s3_service = S3StorageService()
-            
-            if instance.s3_image_key:
-                s3_service.delete_artwork(instance.s3_image_key)
-            
-            if instance.s3_watermarked_key:
-                s3_service.delete_artwork(instance.s3_watermarked_key)
-            
-            # Delete from database
-            instance.delete()
-            
-            return Response({
-                'message': 'Artwork deleted successfully'
-            }, status=status.HTTP_204_NO_CONTENT)
-            
-        except Exception as e:
-            return Response(
-                {'error': f'Delete failed: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        # Delete from database
+        instance.delete()
+        
+        return Response({
+            'message': 'Artwork deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
     
-    def _generate_and_upload_watermark(self, image_file, artist_id, s3_service):
-        """Generate watermarked version and upload to S3"""
-        try:
-            image_file.seek(0)
-            original = Image.open(image_file).convert("RGBA")
-            txt = "© CultureUp"
-            
-            font_size = max(30, int(original.width * 0.12))
-            font = None
-            for fpath in ("DejaVuSans-Bold.ttf", "arialbd.ttf", "arial.ttf"):
-                try:
-                    font = ImageFont.truetype(fpath, font_size)
-                    break
-                except:
-                    font = None
-            if font is None:
-                font = ImageFont.load_default()
-            
-            dummy = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
-            dummydraw = ImageDraw.Draw(dummy)
-            
-            try:
-                bbox = dummydraw.textbbox((0, 0), txt, font=font)
-                text_w = bbox[2] - bbox[0]
-                text_h = bbox[3] - bbox[1]
-            except AttributeError:
-                text_w, text_h = dummydraw.textsize(txt, font=font)
-            
-            padding = int(font_size * 0.4)
-            text_img = Image.new("RGBA", (text_w + padding * 2, text_h + padding * 2), (0, 0, 0, 0))
-            text_draw = ImageDraw.Draw(text_img)
-            
-            fill_color = (255, 255, 255, 200)
-            stroke_color = (0, 0, 0, 200)
-            
-            try:
-                text_draw.text((padding, padding), txt, font=font,
-                            fill=fill_color, stroke_width=2, stroke_fill=stroke_color)
-            except TypeError:
-                text_draw.text((padding+2, padding+2), txt, font=font, fill=stroke_color)
-                text_draw.text((padding, padding), txt, font=font, fill=fill_color)
-            
-            angle = -30
-            rotated = text_img.rotate(angle, expand=1)
-            layer = Image.new("RGBA", original.size, (0, 0, 0, 0))
-            
-            rw, rh = rotated.size
-            step_x = int(rw * 0.9)
-            step_y = int(rh * 0.9)
-            start_x = -rw
-            start_y = -rh
-            
-            for x in range(start_x, original.width + rw, step_x):
-                for y in range(start_y, original.height + rh, step_y):
-                    layer.paste(rotated, (x, y), rotated)
-            
-            combined = Image.alpha_composite(original, layer).convert("RGB")
-            
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-                combined.save(temp_file, format='JPEG', quality=90)
-                temp_path = temp_file.name
-            
-            with open(temp_path, 'rb') as f:
-                from django.core.files.uploadedfile import InMemoryUploadedFile
-                watermarked_file = InMemoryUploadedFile(
-                    f, None, f'watermarked_{image_file.name}',
-                    'image/jpeg', os.path.getsize(temp_path), None
-                )
-                
-                upload_result = s3_service.upload_artwork(
-                    watermarked_file,
-                    artist_id,
-                    f'watermarked_{image_file.name}'
-                )
-            
-            os.unlink(temp_path)
-            
-            if upload_result['success']:
-                return {
-                    's3_key': upload_result['s3_key'],
-                    's3_url': upload_result['s3_url']
-                }
-            return {}
-            
-        except Exception as e:
-            print(f"Watermark generation failed: {e}")
-            return {}
+
     
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve to increment views"""
@@ -1578,3 +1292,6 @@ def global_search(request):
     }
     
     return Response(results)
+
+
+

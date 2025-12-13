@@ -6,4 +6,3 @@ drf-yasg
 Pillow
 stripe
 python-dotenv
-boto3

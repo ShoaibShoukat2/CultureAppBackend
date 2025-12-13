@@ -128,7 +128,7 @@ class AdminArtworkManagementViewSet(ModelViewSet):
     permission_classes = [IsAdminOrStaff]
     pagination_class = AdminPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['artwork_type', 'is_available', 'is_featured', 'category', 'rekognition_checked']
+    filterset_fields = ['artwork_type', 'is_available', 'is_featured', 'category']
     search_fields = ['title', 'description', 'artist__username']
     ordering_fields = ['created_at', 'price', 'views_count', 'likes_count']
     ordering = ['-created_at']
@@ -172,7 +172,7 @@ class AdminArtworkManagementViewSet(ModelViewSet):
             'total_artworks': Artwork.objects.count(),
             'available_artworks': Artwork.objects.filter(is_available=True).count(),
             'featured_artworks': Artwork.objects.filter(is_featured=True).count(),
-            'pending_review': Artwork.objects.filter(rekognition_checked=False).count(),
+            'pending_review': 0,  # No longer using AI review
             'total_views': Artwork.objects.aggregate(Sum('views_count'))['views_count__sum'] or 0,
             'total_likes': Artwork.objects.aggregate(Sum('likes_count'))['likes_count__sum'] or 0,
             'average_price': Artwork.objects.aggregate(Avg('price'))['price__avg'] or 0,
@@ -403,7 +403,7 @@ def admin_dashboard_stats(request):
     content_stats = {
         'total_artworks': Artwork.objects.count(),
         'featured_artworks': Artwork.objects.filter(is_featured=True).count(),
-        'pending_artworks': Artwork.objects.filter(rekognition_checked=False).count(),
+        'pending_artworks': 0,  # No longer using AI review
         'total_jobs': Job.objects.count(),
         'open_jobs': Job.objects.filter(status='open').count(),
         'completed_jobs': Job.objects.filter(status='completed').count(),
