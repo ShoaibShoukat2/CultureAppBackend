@@ -92,8 +92,8 @@ Sale Details:
 - Artwork: {instance.artwork.title}
 - Buyer: {buyer.get_full_name() or buyer.username}
 - Quantity: {instance.quantity}
-- Price: ${instance.price} each
-- Total: ${instance.get_total_price()}
+- Price: PKR{instance.price} each
+- Total: PKR{instance.get_total_price()}
 - Order ID: #{instance.order.id}
 - Sale Date: {instance.order.created_at.strftime('%B %d, %Y at %I:%M %p')}
 
@@ -136,8 +136,8 @@ Equipment: {instance.equipment.name}
 Buyer: {instance.order.buyer.get_full_name() or instance.order.buyer.username}
 Buyer Email: {instance.order.buyer.email}
 Quantity: {instance.quantity}
-Price: ${instance.price} each
-Total: ${instance.get_total_price()}
+Price: PKR{instance.price} each
+Total: PKR{instance.get_total_price()}
 Order ID: #{instance.order.id}
 Sale Date: {instance.order.created_at.strftime('%B %d, %Y at %I:%M %p')}
 

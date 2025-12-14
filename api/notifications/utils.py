@@ -60,7 +60,7 @@ A new contract has been created for the project "{contract.job.title}".
 
 Contract Details:
 - Project: {contract.job.title}
-- Amount: ${contract.amount}
+- Amount: PKR{contract.amount}
 - Deadline: {contract.deadline.strftime('%B %d, %Y')}
 - Status: {contract.get_status_display()}
 
@@ -111,7 +111,7 @@ Both parties have signed the contract and work can now begin!
 
 Contract Details:
 - Project: {contract.job.title}
-- Amount: ${contract.amount}
+- Amount: PKR{contract.amount}
 - Deadline: {contract.deadline.strftime('%B %d, %Y')}
 
 {"As the artist, you can now start working on the project." if recipient_type == 'artist' else "The artist will now begin working on your project."}
@@ -129,7 +129,7 @@ Great news! The contract for "{contract.job.title}" has been successfully comple
 
 Contract Summary:
 - Project: {contract.job.title}
-- Amount: ${contract.amount}
+- Amount: PKR{contract.amount}
 - Completion Date: {timezone.now().strftime('%B %d, %Y')}
 
 {"Your work has been delivered and payment has been released." if recipient_type == 'artist' else "The project has been completed successfully. Thank you for working with our platform!"}
@@ -149,7 +149,7 @@ We regret to inform you that the contract for "{contract.job.title}" has been te
 
 Contract Details:
 - Project: {contract.job.title}
-- Amount: ${contract.amount}
+- Amount: PKR{contract.amount}
 - Termination Date: {timezone.now().strftime('%B %d, %Y')}
 
 If you have any questions about this termination, please contact our support team.

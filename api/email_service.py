@@ -88,7 +88,7 @@ class EmailService:
                 return False
             
             # Create simple payment confirmation email
-            subject = f'Payment Confirmation - ${payment.amount} - CultureUp'
+            subject = f'Payment Confirmation - PKR{payment.amount} - CultureUp'
             message = f"""
 Hello {context['user_name']},
 
@@ -96,7 +96,7 @@ Your payment has been processed successfully!
 
 Payment Details:
 - Payment ID: {context['payment_id']}
-- Amount: ${context['amount']}
+- Amount: PKR{context['amount']}
 - Payment Method: {context['payment_method']}
 - Date: {context['payment_date']}
 - Type: {context['payment_type']}
@@ -135,7 +135,7 @@ CultureUp Team
         """
         try:
             # Notify buyer (payer)
-            buyer_subject = f'Payment Sent - ${payment.amount} - CultureUp'
+            buyer_subject = f'Payment Sent - PKR{payment.amount} - CultureUp'
             buyer_message = f"""
 Hello {payment.payer.get_full_name() or payment.payer.username},
 
@@ -143,7 +143,7 @@ Your payment has been sent successfully!
 
 Payment Details:
 - Payment ID: {payment.transaction_id}
-- Amount: ${payment.amount}
+- Amount: PKR{payment.amount}
 - Payment Method: {payment.get_payment_method_display()}
 - Job: {payment.job.title}
 - Artist: {payment.payee.get_full_name() or payment.payee.username}
@@ -167,7 +167,7 @@ CultureUp Team
             
             # Notify artist (payee)
             if payment.payee:
-                artist_subject = f'Payment Received - ${payment.amount} - CultureUp'
+                artist_subject = f'Payment Received - PKR{payment.amount} - CultureUp'
                 artist_message = f"""
 Hello {payment.payee.get_full_name() or payment.payee.username},
 
@@ -175,7 +175,7 @@ Great news! You've received a payment for your work.
 
 Payment Details:
 - Payment ID: {payment.transaction_id}
-- Amount: ${payment.amount}
+- Amount: PKR{payment.amount}
 - Job: {payment.job.title}
 - Client: {payment.payer.get_full_name() or payment.payer.username}
 - Date: {payment.created_at.strftime('%B %d, %Y at %I:%M %p')}
@@ -226,7 +226,7 @@ Order Details:
 - Order ID: #{order.id}
 - Previous Status: {old_status.title()}
 - New Status: {new_status.title()}
-- Total Amount: ${order.total_amount}
+- Total Amount: PKR{order.total_amount}
 
 {status_messages.get(new_status, 'Your order status has been updated.')}
 

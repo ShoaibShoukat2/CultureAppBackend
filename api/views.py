@@ -52,16 +52,31 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    """User login endpoint"""
-    serializer = UserLoginSerializer(data=request.data)
+    """User login endpoint with 2FA support"""
+    from .two_factor_serializers import LoginWith2FASerializer
+    from .two_factor_utils import create_2fa_session
+    
+    serializer = LoginWith2FASerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.validated_data['user']
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'token': token.key,
-            'message': 'Login successful'
-        }, status=status.HTTP_200_OK)
+        
+        # Check if user has 2FA enabled
+        if user.two_factor_enabled:
+            # Create 2FA session
+            session = create_2fa_session(user)
+            return Response({
+                'requires_2fa': True,
+                'session_token': session.session_token,
+                'message': 'Please provide 2FA code'
+            }, status=status.HTTP_200_OK)
+        else:
+            # Normal login without 2FA
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                'user': UserProfileSerializer(user).data,
+                'token': token.key,
+                'message': 'Login successful'
+            }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -77,6 +92,191 @@ def logout(request):
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
     except:
         return Response({'error': 'Error logging out'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 2FA Views
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_2fa(request):
+    """Verify 2FA code and complete login"""
+    from .two_factor_serializers import Verify2FASerializer
+    from .two_factor_utils import verify_2fa_session, verify_totp_code, use_backup_code
+    
+    serializer = Verify2FASerializer(data=request.data)
+    if serializer.is_valid():
+        session_token = serializer.validated_data['session_token']
+        totp_code = serializer.validated_data.get('totp_code')
+        backup_code = serializer.validated_data.get('backup_code')
+        
+        # Verify session
+        session = verify_2fa_session(session_token)
+        if not session:
+            return Response({
+                'error': 'Invalid or expired session'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = session.user
+        
+        # Verify 2FA code
+        if totp_code:
+            if not verify_totp_code(user.two_factor_secret, totp_code):
+                return Response({
+                    'error': 'Invalid TOTP code'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        elif backup_code:
+            if not use_backup_code(user, backup_code):
+                return Response({
+                    'error': 'Invalid backup code'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mark session as used
+        session.is_used = True
+        session.save()
+        
+        # Create auth token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'user': UserProfileSerializer(user).data,
+            'token': token.key,
+            'message': 'Login successful'
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def setup_2fa(request):
+    """Setup 2FA for user"""
+    from .two_factor_utils import generate_secret_key, generate_qr_code
+    
+    user = request.user
+    
+    if user.two_factor_enabled:
+        return Response({
+            'error': '2FA is already enabled'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate secret key
+    secret_key = generate_secret_key()
+    
+    # Generate QR code
+    qr_code = generate_qr_code(user, secret_key)
+    
+    # Store secret temporarily (not saved until verification)
+    request.session['temp_2fa_secret'] = secret_key
+    
+    return Response({
+        'secret_key': secret_key,
+        'qr_code': qr_code,
+        'message': 'Scan QR code with your authenticator app'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def enable_2fa(request):
+    """Enable 2FA after verification"""
+    from .two_factor_serializers import Enable2FASerializer
+    from .two_factor_utils import verify_totp_code, generate_backup_codes
+    
+    serializer = Enable2FASerializer(data=request.data)
+    if serializer.is_valid():
+        user = request.user
+        totp_code = serializer.validated_data['totp_code']
+        
+        # Get temporary secret from session
+        secret_key = request.session.get('temp_2fa_secret')
+        if not secret_key:
+            return Response({
+                'error': 'No 2FA setup session found. Please start setup again.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify TOTP code
+        if not verify_totp_code(secret_key, totp_code):
+            return Response({
+                'error': 'Invalid TOTP code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Enable 2FA
+        user.two_factor_enabled = True
+        user.two_factor_secret = secret_key
+        user.backup_codes = generate_backup_codes()
+        user.save()
+        
+        # Clear session
+        if 'temp_2fa_secret' in request.session:
+            del request.session['temp_2fa_secret']
+        
+        return Response({
+            'message': '2FA enabled successfully',
+            'backup_codes': user.backup_codes
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def disable_2fa(request):
+    """Disable 2FA"""
+    from .two_factor_serializers import Disable2FASerializer
+    
+    serializer = Disable2FASerializer(data=request.data, context={'request': request})
+    if serializer.is_valid():
+        user = request.user
+        
+        # Disable 2FA
+        user.two_factor_enabled = False
+        user.two_factor_secret = None
+        user.backup_codes = []
+        user.save()
+        
+        return Response({
+            'message': '2FA disabled successfully'
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_2fa_status(request):
+    """Get 2FA status for user"""
+    user = request.user
+    return Response({
+        'two_factor_enabled': user.two_factor_enabled,
+        'backup_codes_count': len(user.backup_codes) if user.backup_codes else 0
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def regenerate_backup_codes(request):
+    """Regenerate backup codes"""
+    from .two_factor_utils import generate_backup_codes
+    
+    user = request.user
+    
+    if not user.two_factor_enabled:
+        return Response({
+            'error': '2FA is not enabled'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate new backup codes
+    user.backup_codes = generate_backup_codes()
+    user.save()
+    
+    return Response({
+        'backup_codes': user.backup_codes,
+        'message': 'Backup codes regenerated successfully'
+    }, status=status.HTTP_200_OK)
+
+
+
+
+
    
    
   
@@ -457,7 +657,7 @@ class JobViewSet(ModelViewSet):
                 job=job,
                 artist=bid.artist,
                 buyer=request.user,
-                terms=f"Contract for project: {job.title}\n\nDelivery Time: {bid.delivery_time} days\nAmount: ${bid.bid_amount}\n\nArtist will deliver based on requirements.",
+                terms=f"Contract for project: {job.title}\n\nDelivery Time: {bid.delivery_time} days\nAmount: PKR{bid.bid_amount}\n\nArtist will deliver based on requirements.",
                 rights_type='display_only',
                 amount=bid.bid_amount,
                 deadline=timezone.now() + timezone.timedelta(days=bid.delivery_time),

@@ -40,7 +40,7 @@
                     {% for item in artwork_items %}
                     <div class="item">
                         <p><strong>{{ item.artwork.title }}</strong> by {{ item.artwork.artist.username }}</p>
-                        <p>Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}</p>
+                        <p>Quantity: {{ item.quantity }} × PKR{{ item.price }} = PKR{{ item.get_total_price }}</p>
                     </div>
                     {% endfor %}
                 {% endif %}
@@ -50,7 +50,7 @@
                     {% for item in equipment_items %}
                     <div class="item">
                         <p><strong>{{ item.equipment.name }}</strong></p>
-                        <p>Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}</p>
+                        <p>Quantity: {{ item.quantity }} × PKR{{ item.price }} = PKR{{ item.get_total_price }}</p>
                     </div>
                     {% endfor %}
                 {% endif %}
@@ -58,7 +58,7 @@
             
             <div class="order-details">
                 <h3>Payment & Shipping</h3>
-                <p><strong>Total Amount:</strong> <span class="total">${{ total_amount }}</span></p>
+                <p><strong>Total Amount:</strong> <span class="total">PKR{{ total_amount }}</span></p>
                 <p><strong>Shipping Address:</strong><br>{{ shipping_address }}</p>
             </div>
             

@@ -6,3 +6,5 @@ drf-yasg
 Pillow
 stripe
 python-dotenv
+pyotp
+qrcode[pil]

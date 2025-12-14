@@ -18,7 +18,7 @@ ITEMS PURCHASED
 Artworks:
 {% for item in artwork_items %}
 - {{ item.artwork.title }} by {{ item.artwork.artist.username }}
-  Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}
+  Quantity: {{ item.quantity }} × PKR{{ item.price }} = PKR{{ item.get_total_price }}
 {% endfor %}
 {% endif %}
 
@@ -26,13 +26,13 @@ Artworks:
 Equipment:
 {% for item in equipment_items %}
 - {{ item.equipment.name }}
-  Quantity: {{ item.quantity }} × ${{ item.price }} = ${{ item.get_total_price }}
+  Quantity: {{ item.quantity }} × PKR{{ item.price }} = PKR{{ item.get_total_price }}
 {% endfor %}
 {% endif %}
 
 PAYMENT & SHIPPING
 ------------------
-Total Amount: ${{ total_amount }}
+Total Amount: PKR{{ total_amount }}
 Shipping Address: {{ shipping_address }}
 
 WHAT'S NEXT?

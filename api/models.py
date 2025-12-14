@@ -22,8 +22,28 @@ class CustomUser(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # 2FA fields
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
+    backup_codes = models.JSONField(default=list, blank=True)
+    
     def __str__(self):
         return f"{self.username} ({self.user_type})"
+
+
+class TwoFactorSession(models.Model):
+    """Temporary session for 2FA verification"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    session_token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+    
+    def __str__(self):
+        return f"2FA Session for {self.user.username}"
 
  
 
@@ -390,7 +410,7 @@ class Equipment(models.Model):
         return False
     
     def __str__(self):
-        return f"{self.name} - ${self.price}"
+        return f"{self.name} - PKR{self.price}"
     
     
     
@@ -522,7 +542,7 @@ class Payment(models.Model):
         return self.amount - self.calculate_platform_fee(fee_percentage)
     
     def __str__(self):
-        return f"Payment #{self.transaction_id} - ${self.amount}"
+        return f"Payment #{self.transaction_id} - PKR{self.amount}"
 
 
 

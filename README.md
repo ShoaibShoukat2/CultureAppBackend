@@ -62,18 +62,19 @@ http://localhost:8000/api/
 ## 📋 Table of Contents
 1. [Admin Backend System](#admin-backend-system) **🆕 NEW**
 2. [Authentication](#authentication)
-3. [Artist Profiles](#artist-profiles)
-4. [Buyer Profiles](#buyer-profiles)
-5. [Artworks (with S3 & Rekognition)](#artworks)
-6. [Jobs/Projects](#jobs-projects)
-7. [Bids](#bids)
-8. [Orders](#orders)
-9. [Payments](#payments)
-10. [Messages](#messages)
-11. [Reviews](#reviews)
-12. [Contracts](#contracts)
-13. [Notifications](#notifications)
-14. [Admin API Endpoints](#admin-api-endpoints) **🆕 NEW**
+3. [Two-Factor Authentication (2FA)](#two-factor-authentication-2fa) **🆕 NEW**
+4. [Artist Profiles](#artist-profiles)
+5. [Buyer Profiles](#buyer-profiles)
+6. [Artworks (with S3 & Rekognition)](#artworks)
+7. [Jobs/Projects](#jobs-projects)
+8. [Bids](#bids)
+9. [Orders](#orders)
+10. [Payments](#payments)
+11. [Messages](#messages)
+12. [Reviews](#reviews)
+13. [Contracts](#contracts)
+14. [Notifications](#notifications)
+15. [Admin API Endpoints](#admin-api-endpoints) **🆕 NEW**
 
 ---
 
@@ -323,6 +324,328 @@ Authorization: Token YOUR_TOKEN
     "message": "Successfully logged out"
 }
 ```
+
+---
+
+## 🔐 Two-Factor Authentication (2FA)
+
+### Overview
+CultureUp supports Time-based One-Time Password (TOTP) two-factor authentication for enhanced account security. Users can enable 2FA using authenticator apps like Google Authenticator, Authy, or Microsoft Authenticator.
+
+### 1. Login with 2FA Support
+**Endpoint:** `POST /api/auth/login/`
+
+**Request Body:**
+```json
+{
+    "username": "user@example.com",
+    "password": "SecurePass123!"
+}
+```
+
+**Response (2FA Disabled - Normal Login):**
+```json
+{
+    "user": {
+        "id": 1,
+        "username": "user@example.com",
+        "user_type": "artist"
+    },
+    "token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
+    "message": "Login successful"
+}
+```
+
+**Response (2FA Enabled - Requires Verification):**
+```json
+{
+    "requires_2fa": true,
+    "session_token": "temp_session_token_here",
+    "message": "Please provide 2FA code"
+}
+```
+
+---
+
+### 2. Verify 2FA Code
+**Endpoint:** `POST /api/auth/2fa/verify/`
+
+**Request Body (with TOTP code):**
+```json
+{
+    "session_token": "temp_session_token_here",
+    "totp_code": "123456"
+}
+```
+
+**Request Body (with backup code):**
+```json
+{
+    "session_token": "temp_session_token_here",
+    "backup_code": "ABCD1234"
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "user": {
+        "id": 1,
+        "username": "user@example.com",
+        "user_type": "artist"
+    },
+    "token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
+    "message": "Login successful"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+    "error": "Invalid TOTP code"
+}
+```
+
+---
+
+### 3. Setup 2FA
+**Endpoint:** `GET /api/auth/2fa/setup/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "secret_key": "JBSWY3DPEHPK3PXP",
+    "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+    "message": "Scan QR code with your authenticator app"
+}
+```
+
+**Usage:**
+1. Call this endpoint to get QR code and secret key
+2. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
+3. Or manually enter the secret key in your authenticator app
+
+---
+
+### 4. Enable 2FA
+**Endpoint:** `POST /api/auth/2fa/enable/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Request Body:**
+```json
+{
+    "totp_code": "123456"
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "2FA enabled successfully",
+    "backup_codes": [
+        "ABCD1234",
+        "EFGH5678",
+        "IJKL9012",
+        "MNOP3456",
+        "QRST7890",
+        "UVWX1234",
+        "YZAB5678",
+        "CDEF9012",
+        "GHIJ3456",
+        "KLMN7890"
+    ]
+}
+```
+
+**Important:** Save the backup codes in a secure location. Each code can only be used once.
+
+---
+
+### 5. Disable 2FA
+**Endpoint:** `POST /api/auth/2fa/disable/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Request Body (with TOTP code):**
+```json
+{
+    "password": "current_password",
+    "totp_code": "123456"
+}
+```
+
+**Request Body (with backup code):**
+```json
+{
+    "password": "current_password",
+    "backup_code": "ABCD1234"
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "message": "2FA disabled successfully"
+}
+```
+
+---
+
+### 6. Get 2FA Status
+**Endpoint:** `GET /api/auth/2fa/status/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "two_factor_enabled": true,
+    "backup_codes_count": 8
+}
+```
+
+---
+
+### 7. Regenerate Backup Codes
+**Endpoint:** `POST /api/auth/2fa/backup-codes/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Success Response (200 OK):**
+```json
+{
+    "backup_codes": [
+        "NEW11234",
+        "NEW25678",
+        "NEW39012",
+        "NEW43456",
+        "NEW57890",
+        "NEW61234",
+        "NEW75678",
+        "NEW89012",
+        "NEW93456",
+        "NEW07890"
+    ],
+    "message": "Backup codes regenerated successfully"
+}
+```
+
+---
+
+### 2FA Frontend Integration Example
+
+```javascript
+// Login flow with 2FA support
+const login = async (username, password) => {
+    const response = await fetch('/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    
+    const data = await response.json();
+    
+    if (data.requires_2fa) {
+        // Show 2FA input form
+        return { 
+            needs2FA: true, 
+            sessionToken: data.session_token 
+        };
+    } else {
+        // Normal login success
+        localStorage.setItem('token', data.token);
+        return { 
+            success: true, 
+            user: data.user 
+        };
+    }
+};
+
+// Verify 2FA code
+const verify2FA = async (sessionToken, totpCode) => {
+    const response = await fetch('/api/auth/2fa/verify/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_token: sessionToken,
+            totp_code: totpCode
+        })
+    });
+    
+    const data = await response.json();
+    if (response.ok) {
+        localStorage.setItem('token', data.token);
+        return { success: true, user: data.user };
+    }
+    return { error: data.error };
+};
+
+// Setup 2FA
+const setup2FA = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/auth/2fa/setup/', {
+        headers: { 
+            'Authorization': `Token ${token}` 
+        }
+    });
+    
+    const data = await response.json();
+    if (response.ok) {
+        // Display QR code: data.qr_code
+        // Show secret key: data.secret_key
+        return data;
+    }
+    return { error: data.error };
+};
+
+// Enable 2FA
+const enable2FA = async (totpCode) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/auth/2fa/enable/', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ totp_code: totpCode })
+    });
+    
+    const data = await response.json();
+    if (response.ok) {
+        // Save backup codes: data.backup_codes
+        return { success: true, backupCodes: data.backup_codes };
+    }
+    return { error: data.error };
+};
+```
+
+---
+
+### 2FA Security Best Practices
+
+1. **Backup Codes**: Always save backup codes in a secure location
+2. **App Recommendations**: Use Google Authenticator, Authy, or Microsoft Authenticator
+3. **Session Timeout**: 2FA sessions expire after 10 minutes
+4. **Rate Limiting**: Multiple failed attempts will temporarily lock the account
+5. **Recovery**: Use backup codes if you lose access to your authenticator app
 
 ---
 
@@ -2429,11 +2752,19 @@ curl -X POST http://localhost:8000/api/bids/ \
 
 ### 🔐 Authentication
 - `POST /api/auth/register/` - Register new user
-- `POST /api/auth/login/` - User login
+- `POST /api/auth/login/` - User login (with 2FA support)
 - `POST /api/auth/logout/` - User logout
 - `GET /api/auth/profile/` - Get user profile
 - `PUT /api/auth/profile/` - Update user profile
 - `PATCH /api/auth/profile/` - Partial update user profile
+
+### 🔐 Two-Factor Authentication (2FA)
+- `GET /api/auth/2fa/setup/` - Setup 2FA (get QR code)
+- `POST /api/auth/2fa/enable/` - Enable 2FA
+- `POST /api/auth/2fa/disable/` - Disable 2FA
+- `POST /api/auth/2fa/verify/` - Verify 2FA code
+- `GET /api/auth/2fa/status/` - Get 2FA status
+- `POST /api/auth/2fa/backup-codes/` - Regenerate backup codes
 
 ### 👨‍🎨 Artist Profiles
 - `GET /api/artist-profiles/` - List all artists
@@ -3687,12 +4018,12 @@ const displayPurchases = (purchasesData) => {
   
   // Display orders (artwork/equipment purchases)
   orders.forEach(order => {
-    console.log(`Order #${order.id}: ${order.order_type} - $${order.total_amount}`);
+    console.log(`Order #${order.id}: ${order.order_type} - PKR${order.total_amount}`);
   });
   
   // Display payments (job payments to artists)
   payments.forEach(payment => {
-    console.log(`Payment #${payment.id}: ${payment.job?.title} - $${payment.amount}`);
+    console.log(`Payment #${payment.id}: ${payment.job?.title} - PKR${payment.amount}`);
   });
 };
 ```
@@ -3761,7 +4092,7 @@ const handleApiError = (response) => {
 ## 🎯 Key Features for Frontend
 
 ### ✅ **Core Platform Features**
-- **User Authentication** (Register, Login, Profile management)
+- **User Authentication** (Register, Login, Profile management, **2FA Support**)
 - **Artist Profiles** (Complete CRUD, reviews, artworks)
 - **Buyer Profiles** (Complete CRUD, **purchases history**)
 - **Artworks** (S3 storage, AI duplicate detection, watermarking)

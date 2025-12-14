@@ -35,6 +35,16 @@ urlpatterns = [
     path('auth/logout/', logout, name='api-logout'),
     path('auth/profile/', UserProfileView.as_view(), name='user-profile'),
     
+    # ===== 2FA URLs =====
+    path('auth/2fa/setup/', setup_2fa, name='setup-2fa'),
+    path('auth/2fa/enable/', enable_2fa, name='enable-2fa'),
+    path('auth/2fa/disable/', disable_2fa, name='disable-2fa'),
+    path('auth/2fa/verify/', verify_2fa, name='verify-2fa'),
+    path('auth/2fa/status/', get_2fa_status, name='2fa-status'),
+    path('auth/2fa/backup-codes/', regenerate_backup_codes, name='regenerate-backup-codes'),
+    
+
+    
     # ===== Dashboard & Stats =====
     path('dashboard/stats/', dashboard_stats, name='dashboard-stats'),
     

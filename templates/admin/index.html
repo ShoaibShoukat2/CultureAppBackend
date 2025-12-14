@@ -24,7 +24,7 @@
         
         <div class="stat-card">
             <h3>Total Revenue</h3>
-            <div class="number" id="total-revenue">$-</div>
+            <div class="number" id="total-revenue">PKR-</div>
             <div class="description">Platform revenue</div>
         </div>
         
@@ -110,7 +110,7 @@ function loadDashboardStats() {
         document.getElementById('total-users').textContent = data.user_stats.total_users;
         document.getElementById('total-artists').textContent = data.user_stats.artists;
         document.getElementById('total-buyers').textContent = data.user_stats.buyers;
-        document.getElementById('total-revenue').textContent = '$' + parseFloat(data.financial_stats.total_revenue).toLocaleString();
+        document.getElementById('total-revenue').textContent = 'PKR' + parseFloat(data.financial_stats.total_revenue).toLocaleString();
         document.getElementById('open-jobs').textContent = data.content_stats.open_jobs;
         document.getElementById('total-artworks').textContent = data.content_stats.total_artworks;
         document.getElementById('pending-artworks').textContent = data.content_stats.pending_artworks;
@@ -155,7 +155,7 @@ function updateRecentArtworks(artworks) {
     const html = artworks.map(artwork => `
         <div style="padding: 8px; border-bottom: 1px solid #eee;">
             <strong>${artwork.title}</strong> by ${artwork.artist__username}
-            <br><small>$${artwork.price} - ${new Date(artwork.created_at).toLocaleDateString()}</small>
+            <br><small>PKR${artwork.price} - ${new Date(artwork.created_at).toLocaleDateString()}</small>
         </div>
     `).join('');
     
@@ -189,7 +189,7 @@ function updateRecentPayments(payments) {
     const html = payments.map(payment => `
         <div style="padding: 8px; border-bottom: 1px solid #eee;">
             <strong>${payment.transaction_id}</strong>
-            <br><small>$${payment.amount} - ${payment.status} - ${new Date(payment.created_at).toLocaleDateString()}</small>
+            <br><small>PKR${payment.amount} - ${payment.status} - ${new Date(payment.created_at).toLocaleDateString()}</small>
         </div>
     `).join('');
     
