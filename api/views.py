@@ -974,15 +974,18 @@ class PaymentViewSet(ModelViewSet):
             return Response({'error': 'Payment already processed'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Create Stripe PaymentIntent
+            # Create Stripe PaymentIntent with 3D Secure (SCA) enabled
             intent = stripe.PaymentIntent.create(
                 amount=int(payment.amount * 100),  # Stripe works in cents
-                currency="usd",
+                currency="pkr",  # Changed to PKR
                 payment_method_types=["card"],
+                confirmation_method="manual",  # Enable manual confirmation for 3D Secure
+                confirm=False,  # Don't auto-confirm, let frontend handle 3D Secure
                 metadata={
                     "payment_id": payment.id,
                     "payer_id": payment.payer.id,
-                    "payee_id": payment.payee.id if payment.payee else None
+                    "payee_id": payment.payee.id if payment.payee else None,
+                    "amount_pkr": str(payment.amount)
                 }
             )
 
@@ -992,9 +995,115 @@ class PaymentViewSet(ModelViewSet):
 
             return Response({
                 'client_secret': intent['client_secret'],
-                'message': 'Stripe PaymentIntent created successfully'
+                'payment_intent_id': intent['id'],
+                'requires_action': intent.get('next_action') is not None,
+                'message': 'Stripe PaymentIntent created successfully. Complete 3D Secure if required.'
             }, status=status.HTTP_200_OK)
 
+        except stripe.error.StripeError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def confirm_payment(self, request, pk=None):
+        """Confirm payment after 3D Secure verification"""
+        payment = self.get_object()
+        
+        if payment.payer != request.user:
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        if payment.status not in ['processing', 'pending']:
+            return Response({'error': 'Payment cannot be confirmed'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        payment_method_id = request.data.get('payment_method_id')
+        
+        if not payment_method_id:
+            return Response({'error': 'Payment method ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Confirm the PaymentIntent with the payment method
+            intent = stripe.PaymentIntent.confirm(
+                payment.stripe_payment_intent,
+                payment_method=payment_method_id,
+                return_url=request.data.get('return_url', 'https://your-website.com/return')
+            )
+            
+            # Check if payment requires additional action (3D Secure)
+            if intent.status == 'requires_action':
+                return Response({
+                    'requires_action': True,
+                    'client_secret': intent.client_secret,
+                    'next_action': intent.next_action,
+                    'message': 'Please complete 3D Secure verification'
+                }, status=status.HTTP_200_OK)
+            
+            elif intent.status == 'succeeded':
+                # Payment successful
+                payment.status = 'completed'
+                payment.save()
+                
+                return Response({
+                    'success': True,
+                    'payment_id': payment.id,
+                    'transaction_id': payment.transaction_id,
+                    'status': payment.status,
+                    'message': 'Payment completed successfully'
+                }, status=status.HTTP_200_OK)
+            
+            else:
+                # Payment failed or requires further action
+                payment.status = 'failed'
+                payment.save()
+                
+                return Response({
+                    'error': f'Payment failed with status: {intent.status}',
+                    'status': intent.status
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except stripe.error.StripeError as e:
+            payment.status = 'failed'
+            payment.save()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def handle_3d_secure(self, request, pk=None):
+        """Handle 3D Secure completion"""
+        payment = self.get_object()
+        
+        if payment.payer != request.user:
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            # Retrieve the latest PaymentIntent status
+            intent = stripe.PaymentIntent.retrieve(payment.stripe_payment_intent)
+            
+            if intent.status == 'succeeded':
+                payment.status = 'completed'
+                payment.save()
+                
+                return Response({
+                    'success': True,
+                    'payment_id': payment.id,
+                    'transaction_id': payment.transaction_id,
+                    'status': payment.status,
+                    'message': '3D Secure verification completed successfully'
+                }, status=status.HTTP_200_OK)
+            
+            elif intent.status == 'requires_action':
+                return Response({
+                    'requires_action': True,
+                    'client_secret': intent.client_secret,
+                    'message': 'Still requires 3D Secure verification'
+                }, status=status.HTTP_200_OK)
+            
+            else:
+                payment.status = 'failed'
+                payment.save()
+                
+                return Response({
+                    'error': f'Payment failed with status: {intent.status}',
+                    'status': intent.status
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
         except stripe.error.StripeError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -1497,185 +1606,3 @@ def global_search(request):
 
 
 
-# Payment 2FA Views
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def initiate_payment_with_2fa(request):
-    """Initiate payment with 2FA check"""
-    from .payment_2fa_serializers import InitiatePaymentSerializer
-    from .payment_2fa_utils import payment_requires_2fa, create_payment_verification_session
-    
-    serializer = InitiatePaymentSerializer(data=request.data)
-    if serializer.is_valid():
-        amount = serializer.validated_data['amount']
-        payment_method = serializer.validated_data['payment_method']
-        order_id = serializer.validated_data.get('order_id')
-        job_id = serializer.validated_data.get('job_id')
-        
-        # Create temporary payment object to check 2FA requirement
-        temp_payment = Payment(
-            payer=request.user,
-            amount=amount,
-            payment_method=payment_method
-        )
-        
-        if payment_requires_2fa(temp_payment):
-            # Create actual payment with 2FA requirement
-            payment = Payment.objects.create(
-                payer=request.user,
-                amount=amount,
-                payment_method=payment_method,
-                order_id=order_id,
-                job_id=job_id,
-                requires_2fa_verification=True,
-                status='pending'
-            )
-            
-            # Create verification session
-            session = create_payment_verification_session(payment)
-            
-            return Response({
-                'requires_2fa': True,
-                'payment_id': payment.id,
-                'session_token': session.session_token,
-                'message': 'Please verify with 2FA to complete payment',
-                'amount': str(amount)
-            }, status=status.HTTP_200_OK)
-        else:
-            # Process payment normally without 2FA
-            payment = Payment.objects.create(
-                payer=request.user,
-                amount=amount,
-                payment_method=payment_method,
-                order_id=order_id,
-                job_id=job_id,
-                requires_2fa_verification=False,
-                is_2fa_verified=True,  # Not required, so mark as verified
-                status='pending'
-            )
-            
-            return Response({
-                'requires_2fa': False,
-                'payment_id': payment.id,
-                'message': 'Payment initiated successfully',
-                'amount': str(amount)
-            }, status=status.HTTP_200_OK)
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def verify_payment_2fa(request):
-    """Verify 2FA for payment"""
-    from .payment_2fa_serializers import PaymentVerificationSerializer
-    from .payment_2fa_utils import verify_payment_2fa_session, verify_payment_2fa_code
-    
-    serializer = PaymentVerificationSerializer(data=request.data)
-    if serializer.is_valid():
-        session_token = serializer.validated_data['session_token']
-        totp_code = serializer.validated_data.get('totp_code')
-        backup_code = serializer.validated_data.get('backup_code')
-        
-        # Verify session
-        session, error = verify_payment_2fa_session(session_token)
-        if not session:
-            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check if user owns this payment
-        if session.payment.payer != request.user:
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Verify 2FA code
-        success, message = verify_payment_2fa_code(session, totp_code, backup_code)
-        
-        if success:
-            return Response({
-                'message': 'Payment verified successfully',
-                'payment_id': session.payment.id,
-                'can_proceed': True
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_payment_verification_status(request, payment_id):
-    """Get payment verification status"""
-    from .payment_2fa_utils import get_payment_verification_status
-    
-    try:
-        payment = Payment.objects.get(id=payment_id, payer=request.user)
-        status_info = get_payment_verification_status(payment)
-        
-        return Response({
-            'payment_id': payment.id,
-            'transaction_id': payment.transaction_id,
-            'amount': str(payment.amount),
-            'status': payment.status,
-            **status_info
-        }, status=status.HTTP_200_OK)
-        
-    except Payment.DoesNotExist:
-        return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def process_verified_payment(request, payment_id):
-    """Process payment after 2FA verification"""
-    from .payment_2fa_utils import can_process_payment
-    
-    try:
-        payment = Payment.objects.get(id=payment_id, payer=request.user)
-        
-        # Check if payment can be processed
-        can_proceed, message = can_process_payment(payment)
-        
-        if not can_proceed:
-            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Here you would integrate with your payment processor (Stripe, PayPal, etc.)
-        # For now, we'll just mark as completed
-        payment.status = 'completed'
-        payment.save()
-        
-        return Response({
-            'message': 'Payment processed successfully',
-            'payment_id': payment.id,
-            'transaction_id': payment.transaction_id,
-            'status': payment.status
-        }, status=status.HTTP_200_OK)
-        
-    except Payment.DoesNotExist:
-        return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def cancel_payment_verification(request, payment_id):
-    """Cancel payment verification and delete payment"""
-    try:
-        payment = Payment.objects.get(
-            id=payment_id, 
-            payer=request.user,
-            status='pending',
-            requires_2fa_verification=True,
-            is_2fa_verified=False
-        )
-        
-        # Delete verification sessions
-        PaymentVerificationSession.objects.filter(payment=payment).delete()
-        
-        # Delete the payment
-        payment.delete()
-        
-        return Response({
-            'message': 'Payment cancelled successfully'
-        }, status=status.HTTP_200_OK)
-        
-    except Payment.DoesNotExist:
-        return Response({'error': 'Payment not found or cannot be cancelled'}, status=status.HTTP_404_NOT_FOUND)

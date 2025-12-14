@@ -43,12 +43,7 @@ urlpatterns = [
     path('auth/2fa/status/', get_2fa_status, name='2fa-status'),
     path('auth/2fa/backup-codes/', regenerate_backup_codes, name='regenerate-backup-codes'),
     
-    # ===== Payment 2FA URLs =====
-    path('payments/initiate-2fa/', initiate_payment_with_2fa, name='initiate-payment-2fa'),
-    path('payments/verify-2fa/', verify_payment_2fa, name='verify-payment-2fa'),
-    path('payments/<int:payment_id>/status/', get_payment_verification_status, name='payment-verification-status'),
-    path('payments/<int:payment_id>/process/', process_verified_payment, name='process-verified-payment'),
-    path('payments/<int:payment_id>/cancel/', cancel_payment_verification, name='cancel-payment-verification'),
+
     
 
     
@@ -110,6 +105,12 @@ urlpatterns = [
     path('payments/<int:pk>/process/', 
          PaymentViewSet.as_view({'post': 'process'}), 
          name='process-payment'),
+    path('payments/<int:pk>/confirm/', 
+         PaymentViewSet.as_view({'post': 'confirm_payment'}), 
+         name='confirm-payment'),
+    path('payments/<int:pk>/3d-secure/', 
+         PaymentViewSet.as_view({'post': 'handle_3d_secure'}), 
+         name='handle-3d-secure'),
     
     # ===== Message Custom Actions =====
     path('messages/<int:pk>/mark-read/', 

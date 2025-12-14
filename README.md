@@ -1905,7 +1905,7 @@ Content-Type: application/json
 
 ---
 
-### 3. Process Payment
+### 3. Process Payment with Stripe (3D Secure Enabled)
 **Endpoint:** `POST /api/payments/{id}/process/`
 
 **Headers:**
@@ -1914,42 +1914,20 @@ Authorization: Token YOUR_TOKEN
 Content-Type: application/json
 ```
 
-**Request Body:**
-```json
-{
-    "transaction_id": "JC1234567890"
-}
-```
-
 **Success Response (200 OK):**
 ```json
 {
-    "message": "Payment processed successfully",
-    "payment": {
-        "id": 1,
-        "status": "completed",
-        "transaction_id": "JC1234567890"
-    }
+    "client_secret": "pi_1234567890_secret_abcdef",
+    "payment_intent_id": "pi_1234567890",
+    "requires_action": false,
+    "message": "Stripe PaymentIntent created successfully. Complete 3D Secure if required."
 }
 ```
 
 ---
 
-## 🔐 Payment Two-Factor Authentication (2FA)
-
-### Overview
-For enhanced security, payments above PKR 5,000 require two-factor authentication when the user has 2FA enabled. This prevents unauthorized high-value transactions and provides an additional security layer.
-
-### Payment 2FA Flow
-1. **Initiate Payment** → Check if 2FA required
-2. **If 2FA Required** → Get verification session
-3. **Verify 2FA Code** → Complete verification
-4. **Process Payment** → Execute the transaction
-
----
-
-### 1. Initiate Payment with 2FA Check
-**Endpoint:** `POST /api/payments/initiate-2fa/`
+### 4. Confirm Payment (After 3D Secure)
+**Endpoint:** `POST /api/payments/{id}/confirm/`
 
 **Headers:**
 ```
@@ -1960,106 +1938,38 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-    "amount": "7500.00",
-    "payment_method": "stripe",
-    "job_id": 5,
-    "order_id": null
+    "payment_method_id": "pm_1234567890",
+    "return_url": "https://your-website.com/return"
 }
 ```
 
-**Response (2FA Required):**
+**Response (Requires 3D Secure):**
 ```json
 {
-    "requires_2fa": true,
-    "payment_id": 123,
-    "session_token": "payment_session_token_here",
-    "message": "Please verify with 2FA to complete payment",
-    "amount": "7500.00"
+    "requires_action": true,
+    "client_secret": "pi_1234567890_secret_abcdef",
+    "next_action": {
+        "type": "use_stripe_sdk"
+    },
+    "message": "Please complete 3D Secure verification"
 }
 ```
 
-**Response (No 2FA Required):**
+**Response (Payment Successful):**
 ```json
 {
-    "requires_2fa": false,
-    "payment_id": 124,
-    "message": "Payment initiated successfully",
-    "amount": "3000.00"
+    "success": true,
+    "payment_id": 1,
+    "transaction_id": "TXN123456789",
+    "status": "completed",
+    "message": "Payment completed successfully"
 }
 ```
 
 ---
 
-### 2. Verify Payment 2FA
-**Endpoint:** `POST /api/payments/verify-2fa/`
-
-**Headers:**
-```
-Authorization: Token YOUR_TOKEN
-Content-Type: application/json
-```
-
-**Request Body (with TOTP code):**
-```json
-{
-    "session_token": "payment_session_token_here",
-    "totp_code": "123456"
-}
-```
-
-**Request Body (with backup code):**
-```json
-{
-    "session_token": "payment_session_token_here",
-    "backup_code": "ABCD1234"
-}
-```
-
-**Success Response:**
-```json
-{
-    "message": "Payment verified successfully",
-    "payment_id": 123,
-    "can_proceed": true
-}
-```
-
-**Error Response:**
-```json
-{
-    "error": "Invalid TOTP code. 2 attempts remaining"
-}
-```
-
----
-
-### 3. Get Payment Verification Status
-**Endpoint:** `GET /api/payments/{payment_id}/status/`
-
-**Headers:**
-```
-Authorization: Token YOUR_TOKEN
-```
-
-**Response:**
-```json
-{
-    "payment_id": 123,
-    "transaction_id": "TXN789456123",
-    "amount": "7500.00",
-    "status": "pending",
-    "requires_2fa": true,
-    "is_verified": false,
-    "is_locked": false,
-    "attempts_remaining": 3,
-    "lockout_expires": null
-}
-```
-
----
-
-### 4. Process Verified Payment
-**Endpoint:** `POST /api/payments/{payment_id}/process/`
+### 5. Handle 3D Secure Completion
+**Endpoint:** `POST /api/payments/{id}/3d-secure/`
 
 **Headers:**
 ```
@@ -2069,128 +1979,112 @@ Authorization: Token YOUR_TOKEN
 **Success Response:**
 ```json
 {
-    "message": "Payment processed successfully",
-    "payment_id": 123,
-    "transaction_id": "TXN789456123",
-    "status": "completed"
-}
-```
-
-**Error Response (Not Verified):**
-```json
-{
-    "error": "2FA verification required"
+    "success": true,
+    "payment_id": 1,
+    "transaction_id": "TXN123456789",
+    "status": "completed",
+    "message": "3D Secure verification completed successfully"
 }
 ```
 
 ---
 
-### 5. Cancel Payment Verification
-**Endpoint:** `POST /api/payments/{payment_id}/cancel/`
+### Stripe 3D Secure Payment Flow
 
-**Headers:**
-```
-Authorization: Token YOUR_TOKEN
-```
-
-**Success Response:**
-```json
-{
-    "message": "Payment cancelled successfully"
-}
-```
-
----
-
-### Payment 2FA Security Features
-
-#### 🔒 **Security Thresholds**
-- **Minimum Amount**: PKR 5,000 (configurable)
-- **User Requirement**: Must have 2FA enabled
-- **Session Timeout**: 15 minutes
-- **Max Attempts**: 3 failed attempts before lockout
-
-#### 🛡️ **Protection Mechanisms**
-- **Account Lockout**: 30 minutes after 3 failed attempts
-- **Session Expiry**: Verification sessions expire automatically
-- **Backup Codes**: Alternative verification method
-- **Audit Trail**: All verification attempts logged
-
-#### ⚡ **Frontend Integration Example**
+#### Frontend Integration Example:
 
 ```javascript
-// Complete payment flow with 2FA
-const processPaymentWith2FA = async (paymentData) => {
-    // Step 1: Initiate payment
-    const initResponse = await fetch('/api/payments/initiate-2fa/', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Token ${token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(paymentData)
-    });
+// Complete Stripe payment flow with 3D Secure
+const processStripePayment = async (paymentId, cardElement) => {
+    const stripe = Stripe('pk_test_your_publishable_key');
     
-    const initData = await initResponse.json();
-    
-    if (initData.requires_2fa) {
-        // Step 2: Show 2FA input and verify
-        const totpCode = await show2FAInput(); // Your UI function
+    try {
+        // Step 1: Process payment to get client_secret
+        const processResponse = await fetch(`/api/payments/${paymentId}/process/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
         
-        const verifyResponse = await fetch('/api/payments/verify-2fa/', {
+        const processData = await processResponse.json();
+        
+        // Step 2: Create payment method
+        const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
+            type: 'card',
+            card: cardElement,
+        });
+        
+        if (pmError) {
+            throw new Error(pmError.message);
+        }
+        
+        // Step 3: Confirm payment
+        const confirmResponse = await fetch(`/api/payments/${paymentId}/confirm/`, {
             method: 'POST',
             headers: {
                 'Authorization': `Token ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                session_token: initData.session_token,
-                totp_code: totpCode
+                payment_method_id: paymentMethod.id,
+                return_url: window.location.origin + '/payment-return'
             })
         });
         
-        const verifyData = await verifyResponse.json();
+        const confirmData = await confirmResponse.json();
         
-        if (verifyData.can_proceed) {
-            // Step 3: Process the verified payment
-            const processResponse = await fetch(`/api/payments/${initData.payment_id}/process/`, {
+        // Step 4: Handle 3D Secure if required
+        if (confirmData.requires_action) {
+            const { error: confirmError } = await stripe.confirmCardPayment(
+                confirmData.client_secret
+            );
+            
+            if (confirmError) {
+                throw new Error(confirmError.message);
+            }
+            
+            // Step 5: Check final status
+            const finalResponse = await fetch(`/api/payments/${paymentId}/3d-secure/`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Token ${token}`
                 }
             });
             
-            return await processResponse.json();
+            return await finalResponse.json();
         } else {
-            throw new Error(verifyData.error);
+            // Payment completed without 3D Secure
+            return confirmData;
         }
-    } else {
-        // No 2FA required, process directly
-        const processResponse = await fetch(`/api/payments/${initData.payment_id}/process/`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Token ${token}`
-            }
-        });
         
-        return await processResponse.json();
+    } catch (error) {
+        console.error('Payment failed:', error);
+        throw error;
     }
 };
 
 // Usage
 try {
-    const result = await processPaymentWith2FA({
-        amount: "7500.00",
-        payment_method: "stripe",
-        job_id: 5
-    });
+    const result = await processStripePayment(123, cardElement);
     console.log('Payment successful:', result);
 } catch (error) {
     console.error('Payment failed:', error.message);
 }
 ```
 
+#### Key Features:
+- **3D Secure (SCA)**: Automatic OTP verification through user's bank
+- **PKR Currency**: Payments processed in Pakistani Rupees
+- **Manual Confirmation**: Frontend controls the payment flow
+- **Error Handling**: Comprehensive error responses
+- **Security**: Bank-level OTP verification
+
+
 ---
+
+
 
 ## 💬 Messages
 
@@ -3094,18 +2988,15 @@ curl -X POST http://localhost:8000/api/bids/ \
 - `POST /api/orders/{id}/confirm/` - Confirm order
 - `POST /api/orders/{id}/cancel/` - Cancel order
 
-### 💳 Payments
+### 💳 Payments (with Stripe 3D Secure)
 - `GET /api/payments/` - List my payments
 - `POST /api/payments/` - Create payment
 - `GET /api/payments/{id}/` - Get payment details
-- `POST /api/payments/{id}/process/` - Process payment
+- `POST /api/payments/{id}/process/` - Process payment (get client_secret)
+- `POST /api/payments/{id}/confirm/` - Confirm payment with 3D Secure
+- `POST /api/payments/{id}/3d-secure/` - Handle 3D Secure completion
 
-### 🔐 Payment 2FA
-- `POST /api/payments/initiate-2fa/` - Initiate payment with 2FA check
-- `POST /api/payments/verify-2fa/` - Verify 2FA for payment
-- `GET /api/payments/{id}/status/` - Get payment verification status
-- `POST /api/payments/{id}/process/` - Process verified payment
-- `POST /api/payments/{id}/cancel/` - Cancel payment verification
+
 
 ### 💬 Messages
 - `GET /api/messages/` - List my messages
