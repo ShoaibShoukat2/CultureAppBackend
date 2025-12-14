@@ -528,6 +528,12 @@ class Payment(models.Model):
     hire_status = models.CharField(max_length=20, choices=HIRE_STATUS_CHOICES, default='pending', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # Payment 2FA fields
+    requires_2fa_verification = models.BooleanField(default=False, help_text="Whether this payment requires 2FA verification")
+    is_2fa_verified = models.BooleanField(default=False, help_text="Whether 2FA has been verified for this payment")
+    verification_attempts = models.PositiveIntegerField(default=0, help_text="Number of failed verification attempts")
+    verification_locked_until = models.DateTimeField(null=True, blank=True, help_text="When verification lock expires")
+    
     def save(self, *args, **kwargs):
         if not self.transaction_id:
             self.transaction_id = str(uuid.uuid4())
@@ -541,8 +547,43 @@ class Payment(models.Model):
         """Calculate artist earning after platform fee"""
         return self.amount - self.calculate_platform_fee(fee_percentage)
     
+    def requires_2fa(self):
+        """Check if payment requires 2FA verification"""
+        # Define minimum amount for 2FA (can be configurable)
+        MIN_2FA_AMOUNT = Decimal('5000.00')  # PKR 5000
+        
+        # Check if user has 2FA enabled and amount exceeds threshold
+        return (self.payer.two_factor_enabled and 
+                self.amount >= MIN_2FA_AMOUNT)
+    
+    def is_verification_locked(self):
+        """Check if payment verification is locked due to failed attempts"""
+        if self.verification_locked_until:
+            return timezone.now() < self.verification_locked_until
+        return False
+    
     def __str__(self):
         return f"Payment #{self.transaction_id} - PKR{self.amount}"
+
+
+class PaymentVerificationSession(models.Model):
+    """Session for payment 2FA verification"""
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='verification_sessions')
+    session_token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    verification_type = models.CharField(max_length=20, choices=[
+        ('payment_confirm', 'Payment Confirmation'),
+        ('payment_refund', 'Payment Refund'),
+        ('payment_release', 'Payment Release')
+    ], default='payment_confirm')
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+    
+    def __str__(self):
+        return f"Payment Verification for {self.payment.transaction_id}"
 
 
 

@@ -1935,6 +1935,263 @@ Content-Type: application/json
 
 ---
 
+## 🔐 Payment Two-Factor Authentication (2FA)
+
+### Overview
+For enhanced security, payments above PKR 5,000 require two-factor authentication when the user has 2FA enabled. This prevents unauthorized high-value transactions and provides an additional security layer.
+
+### Payment 2FA Flow
+1. **Initiate Payment** → Check if 2FA required
+2. **If 2FA Required** → Get verification session
+3. **Verify 2FA Code** → Complete verification
+4. **Process Payment** → Execute the transaction
+
+---
+
+### 1. Initiate Payment with 2FA Check
+**Endpoint:** `POST /api/payments/initiate-2fa/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "amount": "7500.00",
+    "payment_method": "stripe",
+    "job_id": 5,
+    "order_id": null
+}
+```
+
+**Response (2FA Required):**
+```json
+{
+    "requires_2fa": true,
+    "payment_id": 123,
+    "session_token": "payment_session_token_here",
+    "message": "Please verify with 2FA to complete payment",
+    "amount": "7500.00"
+}
+```
+
+**Response (No 2FA Required):**
+```json
+{
+    "requires_2fa": false,
+    "payment_id": 124,
+    "message": "Payment initiated successfully",
+    "amount": "3000.00"
+}
+```
+
+---
+
+### 2. Verify Payment 2FA
+**Endpoint:** `POST /api/payments/verify-2fa/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+Content-Type: application/json
+```
+
+**Request Body (with TOTP code):**
+```json
+{
+    "session_token": "payment_session_token_here",
+    "totp_code": "123456"
+}
+```
+
+**Request Body (with backup code):**
+```json
+{
+    "session_token": "payment_session_token_here",
+    "backup_code": "ABCD1234"
+}
+```
+
+**Success Response:**
+```json
+{
+    "message": "Payment verified successfully",
+    "payment_id": 123,
+    "can_proceed": true
+}
+```
+
+**Error Response:**
+```json
+{
+    "error": "Invalid TOTP code. 2 attempts remaining"
+}
+```
+
+---
+
+### 3. Get Payment Verification Status
+**Endpoint:** `GET /api/payments/{payment_id}/status/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Response:**
+```json
+{
+    "payment_id": 123,
+    "transaction_id": "TXN789456123",
+    "amount": "7500.00",
+    "status": "pending",
+    "requires_2fa": true,
+    "is_verified": false,
+    "is_locked": false,
+    "attempts_remaining": 3,
+    "lockout_expires": null
+}
+```
+
+---
+
+### 4. Process Verified Payment
+**Endpoint:** `POST /api/payments/{payment_id}/process/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Success Response:**
+```json
+{
+    "message": "Payment processed successfully",
+    "payment_id": 123,
+    "transaction_id": "TXN789456123",
+    "status": "completed"
+}
+```
+
+**Error Response (Not Verified):**
+```json
+{
+    "error": "2FA verification required"
+}
+```
+
+---
+
+### 5. Cancel Payment Verification
+**Endpoint:** `POST /api/payments/{payment_id}/cancel/`
+
+**Headers:**
+```
+Authorization: Token YOUR_TOKEN
+```
+
+**Success Response:**
+```json
+{
+    "message": "Payment cancelled successfully"
+}
+```
+
+---
+
+### Payment 2FA Security Features
+
+#### 🔒 **Security Thresholds**
+- **Minimum Amount**: PKR 5,000 (configurable)
+- **User Requirement**: Must have 2FA enabled
+- **Session Timeout**: 15 minutes
+- **Max Attempts**: 3 failed attempts before lockout
+
+#### 🛡️ **Protection Mechanisms**
+- **Account Lockout**: 30 minutes after 3 failed attempts
+- **Session Expiry**: Verification sessions expire automatically
+- **Backup Codes**: Alternative verification method
+- **Audit Trail**: All verification attempts logged
+
+#### ⚡ **Frontend Integration Example**
+
+```javascript
+// Complete payment flow with 2FA
+const processPaymentWith2FA = async (paymentData) => {
+    // Step 1: Initiate payment
+    const initResponse = await fetch('/api/payments/initiate-2fa/', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(paymentData)
+    });
+    
+    const initData = await initResponse.json();
+    
+    if (initData.requires_2fa) {
+        // Step 2: Show 2FA input and verify
+        const totpCode = await show2FAInput(); // Your UI function
+        
+        const verifyResponse = await fetch('/api/payments/verify-2fa/', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                session_token: initData.session_token,
+                totp_code: totpCode
+            })
+        });
+        
+        const verifyData = await verifyResponse.json();
+        
+        if (verifyData.can_proceed) {
+            // Step 3: Process the verified payment
+            const processResponse = await fetch(`/api/payments/${initData.payment_id}/process/`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`
+                }
+            });
+            
+            return await processResponse.json();
+        } else {
+            throw new Error(verifyData.error);
+        }
+    } else {
+        // No 2FA required, process directly
+        const processResponse = await fetch(`/api/payments/${initData.payment_id}/process/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`
+            }
+        });
+        
+        return await processResponse.json();
+    }
+};
+
+// Usage
+try {
+    const result = await processPaymentWith2FA({
+        amount: "7500.00",
+        payment_method: "stripe",
+        job_id: 5
+    });
+    console.log('Payment successful:', result);
+} catch (error) {
+    console.error('Payment failed:', error.message);
+}
+```
+
+---
+
 ## 💬 Messages
 
 ### 1. List My Messages
@@ -2842,6 +3099,13 @@ curl -X POST http://localhost:8000/api/bids/ \
 - `POST /api/payments/` - Create payment
 - `GET /api/payments/{id}/` - Get payment details
 - `POST /api/payments/{id}/process/` - Process payment
+
+### 🔐 Payment 2FA
+- `POST /api/payments/initiate-2fa/` - Initiate payment with 2FA check
+- `POST /api/payments/verify-2fa/` - Verify 2FA for payment
+- `GET /api/payments/{id}/status/` - Get payment verification status
+- `POST /api/payments/{id}/process/` - Process verified payment
+- `POST /api/payments/{id}/cancel/` - Cancel payment verification
 
 ### 💬 Messages
 - `GET /api/messages/` - List my messages

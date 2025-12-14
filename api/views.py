@@ -1495,3 +1495,187 @@ def global_search(request):
 
 
 
+
+
+# Payment 2FA Views
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def initiate_payment_with_2fa(request):
+    """Initiate payment with 2FA check"""
+    from .payment_2fa_serializers import InitiatePaymentSerializer
+    from .payment_2fa_utils import payment_requires_2fa, create_payment_verification_session
+    
+    serializer = InitiatePaymentSerializer(data=request.data)
+    if serializer.is_valid():
+        amount = serializer.validated_data['amount']
+        payment_method = serializer.validated_data['payment_method']
+        order_id = serializer.validated_data.get('order_id')
+        job_id = serializer.validated_data.get('job_id')
+        
+        # Create temporary payment object to check 2FA requirement
+        temp_payment = Payment(
+            payer=request.user,
+            amount=amount,
+            payment_method=payment_method
+        )
+        
+        if payment_requires_2fa(temp_payment):
+            # Create actual payment with 2FA requirement
+            payment = Payment.objects.create(
+                payer=request.user,
+                amount=amount,
+                payment_method=payment_method,
+                order_id=order_id,
+                job_id=job_id,
+                requires_2fa_verification=True,
+                status='pending'
+            )
+            
+            # Create verification session
+            session = create_payment_verification_session(payment)
+            
+            return Response({
+                'requires_2fa': True,
+                'payment_id': payment.id,
+                'session_token': session.session_token,
+                'message': 'Please verify with 2FA to complete payment',
+                'amount': str(amount)
+            }, status=status.HTTP_200_OK)
+        else:
+            # Process payment normally without 2FA
+            payment = Payment.objects.create(
+                payer=request.user,
+                amount=amount,
+                payment_method=payment_method,
+                order_id=order_id,
+                job_id=job_id,
+                requires_2fa_verification=False,
+                is_2fa_verified=True,  # Not required, so mark as verified
+                status='pending'
+            )
+            
+            return Response({
+                'requires_2fa': False,
+                'payment_id': payment.id,
+                'message': 'Payment initiated successfully',
+                'amount': str(amount)
+            }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_payment_2fa(request):
+    """Verify 2FA for payment"""
+    from .payment_2fa_serializers import PaymentVerificationSerializer
+    from .payment_2fa_utils import verify_payment_2fa_session, verify_payment_2fa_code
+    
+    serializer = PaymentVerificationSerializer(data=request.data)
+    if serializer.is_valid():
+        session_token = serializer.validated_data['session_token']
+        totp_code = serializer.validated_data.get('totp_code')
+        backup_code = serializer.validated_data.get('backup_code')
+        
+        # Verify session
+        session, error = verify_payment_2fa_session(session_token)
+        if not session:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user owns this payment
+        if session.payment.payer != request.user:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Verify 2FA code
+        success, message = verify_payment_2fa_code(session, totp_code, backup_code)
+        
+        if success:
+            return Response({
+                'message': 'Payment verified successfully',
+                'payment_id': session.payment.id,
+                'can_proceed': True
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_payment_verification_status(request, payment_id):
+    """Get payment verification status"""
+    from .payment_2fa_utils import get_payment_verification_status
+    
+    try:
+        payment = Payment.objects.get(id=payment_id, payer=request.user)
+        status_info = get_payment_verification_status(payment)
+        
+        return Response({
+            'payment_id': payment.id,
+            'transaction_id': payment.transaction_id,
+            'amount': str(payment.amount),
+            'status': payment.status,
+            **status_info
+        }, status=status.HTTP_200_OK)
+        
+    except Payment.DoesNotExist:
+        return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def process_verified_payment(request, payment_id):
+    """Process payment after 2FA verification"""
+    from .payment_2fa_utils import can_process_payment
+    
+    try:
+        payment = Payment.objects.get(id=payment_id, payer=request.user)
+        
+        # Check if payment can be processed
+        can_proceed, message = can_process_payment(payment)
+        
+        if not can_proceed:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Here you would integrate with your payment processor (Stripe, PayPal, etc.)
+        # For now, we'll just mark as completed
+        payment.status = 'completed'
+        payment.save()
+        
+        return Response({
+            'message': 'Payment processed successfully',
+            'payment_id': payment.id,
+            'transaction_id': payment.transaction_id,
+            'status': payment.status
+        }, status=status.HTTP_200_OK)
+        
+    except Payment.DoesNotExist:
+        return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_payment_verification(request, payment_id):
+    """Cancel payment verification and delete payment"""
+    try:
+        payment = Payment.objects.get(
+            id=payment_id, 
+            payer=request.user,
+            status='pending',
+            requires_2fa_verification=True,
+            is_2fa_verified=False
+        )
+        
+        # Delete verification sessions
+        PaymentVerificationSession.objects.filter(payment=payment).delete()
+        
+        # Delete the payment
+        payment.delete()
+        
+        return Response({
+            'message': 'Payment cancelled successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Payment.DoesNotExist:
+        return Response({'error': 'Payment not found or cannot be cancelled'}, status=status.HTTP_404_NOT_FOUND)
