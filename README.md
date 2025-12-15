@@ -416,19 +416,36 @@ CultureUp supports Time-based One-Time Password (TOTP) two-factor authentication
 Authorization: Token YOUR_TOKEN
 ```
 
-**Success Response (200 OK):**
+**Success Response (New Setup):**
 ```json
 {
     "secret_key": "JBSWY3DPEHPK3PXP",
     "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
-    "message": "Scan QR code with your authenticator app"
+    "message": "Scan QR code with your authenticator app",
+    "expires_in_minutes": 30
+}
+```
+
+**Success Response (Existing Setup):**
+```json
+{
+    "secret_key": "JBSWY3DPEHPK3PXP",
+    "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+    "message": "Existing setup session found. Use the same QR code.",
+    "expires_in_minutes": 15
 }
 ```
 
 **Usage:**
 1. Call this endpoint to get QR code and secret key
-2. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
-3. Or manually enter the secret key in your authenticator app
+2. **QR code stays the same** for 30 minutes (no need to refresh)
+3. Scan QR code with authenticator app (Google Authenticator, Authy, etc.)
+4. Or manually enter the secret key in your authenticator app
+
+**Reset Setup (if needed):**
+```
+POST /api/auth/2fa/reset-setup/
+```
 
 ---
 
@@ -478,10 +495,12 @@ Authorization: Token YOUR_TOKEN
 Authorization: Token YOUR_TOKEN
 ```
 
+**⚠️ Required: BOTH password AND 2FA verification**
+
 **Request Body (with TOTP code):**
 ```json
 {
-    "password": "current_password",
+    "password": "your_account_password",
     "totp_code": "123456"
 }
 ```
@@ -489,7 +508,7 @@ Authorization: Token YOUR_TOKEN
 **Request Body (with backup code):**
 ```json
 {
-    "password": "current_password",
+    "password": "your_account_password", 
     "backup_code": "ABCD1234"
 }
 ```
@@ -498,6 +517,29 @@ Authorization: Token YOUR_TOKEN
 ```json
 {
     "message": "2FA disabled successfully"
+}
+```
+
+**Error Response (Missing TOTP):**
+```json
+{
+    "totp_code": ["Please provide TOTP code from your authenticator app"],
+    "backup_code": ["Or provide a backup code instead"],
+    "message": "To disable 2FA, you need: 1) Your password AND 2) TOTP code from authenticator app OR backup code"
+}
+```
+
+**Error Response (Invalid Password):**
+```json
+{
+    "password": ["Invalid password"]
+}
+```
+
+**Error Response (Invalid TOTP):**
+```json
+{
+    "totp_code": ["Invalid TOTP code. Check your authenticator app."]
 }
 ```
 

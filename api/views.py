@@ -151,6 +151,7 @@ def setup_2fa(request):
     """Setup 2FA for user"""
     from .two_factor_utils import generate_secret_key, generate_qr_code
     from datetime import timedelta
+    from .models import TwoFactorSetupSession
     
     user = request.user
     
@@ -159,16 +160,36 @@ def setup_2fa(request):
             'error': '2FA is already enabled'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # Generate secret key
+    # Check if there's already a valid setup session
+    try:
+        existing_session = TwoFactorSetupSession.objects.get(user=user)
+        
+        # If session is not expired, reuse it
+        if not existing_session.is_expired():
+            secret_key = existing_session.secret_key
+            qr_code = generate_qr_code(user, secret_key)
+            
+            return Response({
+                'secret_key': secret_key,
+                'qr_code': qr_code,
+                'message': 'Existing setup session found. Use the same QR code.',
+                'expires_in_minutes': int((existing_session.expires_at - timezone.now()).total_seconds() / 60)
+            }, status=status.HTTP_200_OK)
+        else:
+            # Session expired, delete it
+            existing_session.delete()
+            
+    except TwoFactorSetupSession.DoesNotExist:
+        # No existing session, continue with new setup
+        pass
+    
+    # Generate new secret key
     secret_key = generate_secret_key()
     
     # Generate QR code
     qr_code = generate_qr_code(user, secret_key)
     
-    # Store secret in database (expires in 30 minutes)
-    from .models import TwoFactorSetupSession
-    TwoFactorSetupSession.objects.filter(user=user).delete()  # Remove any existing session
-    
+    # Create new setup session (expires in 30 minutes)
     setup_session = TwoFactorSetupSession.objects.create(
         user=user,
         secret_key=secret_key,
@@ -178,7 +199,8 @@ def setup_2fa(request):
     return Response({
         'secret_key': secret_key,
         'qr_code': qr_code,
-        'message': 'Scan QR code with your authenticator app'
+        'message': 'Scan QR code with your authenticator app',
+        'expires_in_minutes': 30
     }, status=status.HTTP_200_OK)
 
 
@@ -320,6 +342,65 @@ def force_disable_2fa(request):
     
     return Response({
         'message': '2FA force disabled successfully'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reset_2fa_setup(request):
+    """Reset 2FA setup session (generate new QR code)"""
+    from .models import TwoFactorSetupSession
+    
+    user = request.user
+    
+    if user.two_factor_enabled:
+        return Response({
+            'error': '2FA is already enabled. Disable it first to reset setup.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Delete existing setup session
+    TwoFactorSetupSession.objects.filter(user=user).delete()
+    
+    return Response({
+        'message': 'Setup session reset. Call /setup/ again to get new QR code.'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_2fa_disable_requirements(request):
+    """Get requirements for disabling 2FA"""
+    user = request.user
+    
+    if not user.two_factor_enabled:
+        return Response({
+            'message': '2FA is not enabled for this account'
+        }, status=status.HTTP_200_OK)
+    
+    return Response({
+        'message': 'To disable 2FA, you need to provide:',
+        'requirements': [
+            {
+                'field': 'password',
+                'description': 'Your account password',
+                'required': True
+            },
+            {
+                'field': 'totp_code',
+                'description': '6-digit code from your authenticator app (Google Authenticator, Authy, etc.)',
+                'required': 'Either this OR backup_code'
+            },
+            {
+                'field': 'backup_code',
+                'description': '8-character backup code (alternative to TOTP)',
+                'required': 'Either this OR totp_code'
+            }
+        ],
+        'example_request': {
+            'password': 'your_account_password',
+            'totp_code': '123456'
+        },
+        'backup_codes_remaining': len(user.backup_codes) if user.backup_codes else 0
     }, status=status.HTTP_200_OK)
 
 

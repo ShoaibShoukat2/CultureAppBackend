@@ -32,22 +32,37 @@ class Disable2FASerializer(serializers.Serializer):
         backup_code = attrs.get('backup_code')
         
         # Verify password first
+        if not password:
+            raise serializers.ValidationError({
+                "password": ["Password is required to disable 2FA"]
+            })
+        
         if not user.check_password(password):
-            raise serializers.ValidationError("Invalid password")
+            raise serializers.ValidationError({
+                "password": ["Invalid password"]
+            })
         
         # If user has 2FA enabled, require 2FA verification
         if user.two_factor_enabled:
             if not totp_code and not backup_code:
-                raise serializers.ValidationError("Either TOTP code or backup code is required to disable 2FA")
+                raise serializers.ValidationError({
+                    "totp_code": ["Please provide TOTP code from your authenticator app"],
+                    "backup_code": ["Or provide a backup code instead"],
+                    "message": "To disable 2FA, you need: 1) Your password AND 2) TOTP code from authenticator app OR backup code"
+                })
             
             if totp_code:
                 from .two_factor_utils import verify_totp_code
                 if not verify_totp_code(user.two_factor_secret, totp_code):
-                    raise serializers.ValidationError("Invalid TOTP code")
+                    raise serializers.ValidationError({
+                        "totp_code": ["Invalid TOTP code. Check your authenticator app."]
+                    })
             elif backup_code:
                 from .two_factor_utils import use_backup_code
                 if not use_backup_code(user, backup_code):
-                    raise serializers.ValidationError("Invalid backup code")
+                    raise serializers.ValidationError({
+                        "backup_code": ["Invalid or already used backup code"]
+                    })
         
         return attrs
 

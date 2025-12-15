@@ -43,6 +43,8 @@ urlpatterns = [
     path('auth/2fa/status/', get_2fa_status, name='2fa-status'),
     path('auth/2fa/backup-codes/', regenerate_backup_codes, name='regenerate-backup-codes'),
     path('auth/2fa/force-disable/', force_disable_2fa, name='force-disable-2fa'),
+    path('auth/2fa/reset-setup/', reset_2fa_setup, name='reset-2fa-setup'),
+    path('auth/2fa/disable-requirements/', get_2fa_disable_requirements, name='2fa-disable-requirements'),
     
 
     
