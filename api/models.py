@@ -26,6 +26,7 @@ class CustomUser(AbstractUser):
     two_factor_enabled = models.BooleanField(default=False)
     two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
     backup_codes = models.JSONField(default=list, blank=True)
+    temp_2fa_secret = models.CharField(max_length=32, blank=True, null=True)  # Temporary secret for setup
     
     def __str__(self):
         return f"{self.username} ({self.user_type})"
@@ -44,6 +45,20 @@ class TwoFactorSession(models.Model):
     
     def __str__(self):
         return f"2FA Session for {self.user.username}"
+
+
+class TwoFactorSetupSession(models.Model):
+    """Temporary session for 2FA setup"""
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    secret_key = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+    
+    def __str__(self):
+        return f"2FA Setup for {self.user.username}"
 
  
 

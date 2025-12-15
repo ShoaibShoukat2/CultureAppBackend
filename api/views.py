@@ -150,6 +150,7 @@ def verify_2fa(request):
 def setup_2fa(request):
     """Setup 2FA for user"""
     from .two_factor_utils import generate_secret_key, generate_qr_code
+    from datetime import timedelta
     
     user = request.user
     
@@ -164,8 +165,15 @@ def setup_2fa(request):
     # Generate QR code
     qr_code = generate_qr_code(user, secret_key)
     
-    # Store secret temporarily (not saved until verification)
-    request.session['temp_2fa_secret'] = secret_key
+    # Store secret in database (expires in 30 minutes)
+    from .models import TwoFactorSetupSession
+    TwoFactorSetupSession.objects.filter(user=user).delete()  # Remove any existing session
+    
+    setup_session = TwoFactorSetupSession.objects.create(
+        user=user,
+        secret_key=secret_key,
+        expires_at=timezone.now() + timedelta(minutes=30)
+    )
     
     return Response({
         'secret_key': secret_key,
@@ -180,15 +188,27 @@ def enable_2fa(request):
     """Enable 2FA after verification"""
     from .two_factor_serializers import Enable2FASerializer
     from .two_factor_utils import verify_totp_code, generate_backup_codes
+    from .models import TwoFactorSetupSession
     
     serializer = Enable2FASerializer(data=request.data)
     if serializer.is_valid():
         user = request.user
         totp_code = serializer.validated_data['totp_code']
         
-        # Get temporary secret from session
-        secret_key = request.session.get('temp_2fa_secret')
-        if not secret_key:
+        # Get temporary secret from database
+        try:
+            setup_session = TwoFactorSetupSession.objects.get(user=user)
+            
+            # Check if session expired
+            if setup_session.is_expired():
+                setup_session.delete()
+                return Response({
+                    'error': 'Setup session expired. Please start setup again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            secret_key = setup_session.secret_key
+            
+        except TwoFactorSetupSession.DoesNotExist:
             return Response({
                 'error': 'No 2FA setup session found. Please start setup again.'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -205,9 +225,8 @@ def enable_2fa(request):
         user.backup_codes = generate_backup_codes()
         user.save()
         
-        # Clear session
-        if 'temp_2fa_secret' in request.session:
-            del request.session['temp_2fa_secret']
+        # Clear setup session
+        setup_session.delete()
         
         return Response({
             'message': '2FA enabled successfully',
