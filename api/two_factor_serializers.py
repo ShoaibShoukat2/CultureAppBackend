@@ -31,20 +31,23 @@ class Disable2FASerializer(serializers.Serializer):
         totp_code = attrs.get('totp_code')
         backup_code = attrs.get('backup_code')
         
-        # Verify password
+        # Verify password first
         if not user.check_password(password):
             raise serializers.ValidationError("Invalid password")
         
-        # Verify 2FA code (either TOTP or backup code)
-        if not totp_code and not backup_code:
-            raise serializers.ValidationError("Either TOTP code or backup code is required")
-        
-        if totp_code:
-            if not verify_totp_code(user.two_factor_secret, totp_code):
-                raise serializers.ValidationError("Invalid TOTP code")
-        elif backup_code:
-            if not use_backup_code(user, backup_code):
-                raise serializers.ValidationError("Invalid backup code")
+        # If user has 2FA enabled, require 2FA verification
+        if user.two_factor_enabled:
+            if not totp_code and not backup_code:
+                raise serializers.ValidationError("Either TOTP code or backup code is required to disable 2FA")
+            
+            if totp_code:
+                from .two_factor_utils import verify_totp_code
+                if not verify_totp_code(user.two_factor_secret, totp_code):
+                    raise serializers.ValidationError("Invalid TOTP code")
+            elif backup_code:
+                from .two_factor_utils import use_backup_code
+                if not use_backup_code(user, backup_code):
+                    raise serializers.ValidationError("Invalid backup code")
         
         return attrs
 

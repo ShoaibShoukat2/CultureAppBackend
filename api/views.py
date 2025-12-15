@@ -293,6 +293,36 @@ def regenerate_backup_codes(request):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def force_disable_2fa(request):
+    """Force disable 2FA with password only (for testing/emergency)"""
+    password = request.data.get('password')
+    
+    if not password:
+        return Response({
+            'error': 'Password is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    user = request.user
+    
+    # Verify password
+    if not user.check_password(password):
+        return Response({
+            'error': 'Invalid password'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Force disable 2FA
+    user.two_factor_enabled = False
+    user.two_factor_secret = None
+    user.backup_codes = []
+    user.save()
+    
+    return Response({
+        'message': '2FA force disabled successfully'
+    }, status=status.HTTP_200_OK)
+
+
 
 
 
