@@ -1104,13 +1104,12 @@ class PaymentViewSet(ModelViewSet):
             return Response({'error': 'Payment already processed'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Create Stripe PaymentIntent with 3D Secure (SCA) enabled
+            # Create Stripe PaymentIntent with automatic confirmation for better frontend compatibility
             intent = stripe.PaymentIntent.create(
                 amount=int(payment.amount * 100),  # Stripe works in cents
                 currency="pkr",  # Changed to PKR
                 payment_method_types=["card"],
-                confirmation_method="manual",  # Enable manual confirmation for 3D Secure
-                confirm=False,  # Don't auto-confirm, let frontend handle 3D Secure
+                confirmation_method="automatic",  # Automatic confirmation works better with Stripe.js
                 metadata={
                     "payment_id": payment.id,
                     "payer_id": payment.payer.id,
@@ -1127,7 +1126,7 @@ class PaymentViewSet(ModelViewSet):
                 'client_secret': intent['client_secret'],
                 'payment_intent_id': intent['id'],
                 'requires_action': intent.get('next_action') is not None,
-                'message': 'Stripe PaymentIntent created successfully. Complete 3D Secure if required.'
+                'message': 'Stripe PaymentIntent created successfully. Use client_secret with Stripe.js'
             }, status=status.HTTP_200_OK)
 
         except stripe.error.StripeError as e:
@@ -1135,7 +1134,7 @@ class PaymentViewSet(ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def confirm_payment(self, request, pk=None):
-        """Confirm payment after 3D Secure verification"""
+        """Confirm payment status after frontend processing"""
         payment = self.get_object()
         
         if payment.payer != request.user:
@@ -1144,29 +1143,11 @@ class PaymentViewSet(ModelViewSet):
         if payment.status not in ['processing', 'pending']:
             return Response({'error': 'Payment cannot be confirmed'}, status=status.HTTP_400_BAD_REQUEST)
         
-        payment_method_id = request.data.get('payment_method_id')
-        
-        if not payment_method_id:
-            return Response({'error': 'Payment method ID required'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
-            # Confirm the PaymentIntent with the payment method
-            intent = stripe.PaymentIntent.confirm(
-                payment.stripe_payment_intent,
-                payment_method=payment_method_id,
-                return_url=request.data.get('return_url', 'https://your-website.com/return')
-            )
+            # Check the PaymentIntent status from Stripe
+            intent = stripe.PaymentIntent.retrieve(payment.stripe_payment_intent)
             
-            # Check if payment requires additional action (3D Secure)
-            if intent.status == 'requires_action':
-                return Response({
-                    'requires_action': True,
-                    'client_secret': intent.client_secret,
-                    'next_action': intent.next_action,
-                    'message': 'Please complete 3D Secure verification'
-                }, status=status.HTTP_200_OK)
-            
-            elif intent.status == 'succeeded':
+            if intent.status == 'succeeded':
                 # Payment successful
                 payment.status = 'completed'
                 payment.save()
@@ -1179,8 +1160,22 @@ class PaymentViewSet(ModelViewSet):
                     'message': 'Payment completed successfully'
                 }, status=status.HTTP_200_OK)
             
+            elif intent.status == 'requires_action':
+                return Response({
+                    'requires_action': True,
+                    'client_secret': intent.client_secret,
+                    'next_action': intent.next_action,
+                    'message': 'Please complete 3D Secure verification'
+                }, status=status.HTTP_200_OK)
+            
+            elif intent.status == 'processing':
+                return Response({
+                    'processing': True,
+                    'message': 'Payment is being processed'
+                }, status=status.HTTP_200_OK)
+            
             else:
-                # Payment failed or requires further action
+                # Payment failed
                 payment.status = 'failed'
                 payment.save()
                 
@@ -1190,8 +1185,6 @@ class PaymentViewSet(ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
                 
         except stripe.error.StripeError as e:
-            payment.status = 'failed'
-            payment.save()
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])

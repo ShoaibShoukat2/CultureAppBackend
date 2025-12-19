@@ -1968,20 +1968,30 @@ Content-Type: application/json
 
 ---
 
-### 4. Confirm Payment (After 3D Secure)
+### 4. Confirm Payment (Check Status)
 **Endpoint:** `POST /api/payments/{id}/confirm/`
 
 **Headers:**
 ```
 Authorization: Token YOUR_TOKEN
-Content-Type: application/json
 ```
 
-**Request Body:**
+**Success Response (Payment Completed):**
 ```json
 {
-    "payment_method_id": "pm_1234567890",
-    "return_url": "https://your-website.com/return"
+    "success": true,
+    "payment_id": 1,
+    "transaction_id": "TXN123456789",
+    "status": "completed",
+    "message": "Payment completed successfully"
+}
+```
+
+**Response (Still Processing):**
+```json
+{
+    "processing": true,
+    "message": "Payment is being processed"
 }
 ```
 
@@ -1994,17 +2004,6 @@ Content-Type: application/json
         "type": "use_stripe_sdk"
     },
     "message": "Please complete 3D Secure verification"
-}
-```
-
-**Response (Payment Successful):**
-```json
-{
-    "success": true,
-    "payment_id": 1,
-    "transaction_id": "TXN123456789",
-    "status": "completed",
-    "message": "Payment completed successfully"
 }
 ```
 
@@ -2036,7 +2035,7 @@ Authorization: Token YOUR_TOKEN
 #### Frontend Integration Example:
 
 ```javascript
-// Complete Stripe payment flow with 3D Secure
+// Complete Stripe payment flow with automatic confirmation
 const processStripePayment = async (paymentId, cardElement) => {
     const stripe = Stripe('pk_test_your_publishable_key');
     
@@ -2052,54 +2051,32 @@ const processStripePayment = async (paymentId, cardElement) => {
         
         const processData = await processResponse.json();
         
-        // Step 2: Create payment method
-        const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
-            type: 'card',
-            card: cardElement,
-        });
+        // Step 2: Confirm payment with Stripe.js (handles 3D Secure automatically)
+        const { error, paymentIntent } = await stripe.confirmCardPayment(
+            processData.client_secret,
+            {
+                payment_method: {
+                    card: cardElement,
+                    billing_details: {
+                        name: 'Customer Name',
+                    },
+                }
+            }
+        );
         
-        if (pmError) {
-            throw new Error(pmError.message);
+        if (error) {
+            throw new Error(error.message);
         }
         
-        // Step 3: Confirm payment
+        // Step 3: Check final status with backend
         const confirmResponse = await fetch(`/api/payments/${paymentId}/confirm/`, {
             method: 'POST',
             headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                payment_method_id: paymentMethod.id,
-                return_url: window.location.origin + '/payment-return'
-            })
+                'Authorization': `Token ${token}`
+            }
         });
         
-        const confirmData = await confirmResponse.json();
-        
-        // Step 4: Handle 3D Secure if required
-        if (confirmData.requires_action) {
-            const { error: confirmError } = await stripe.confirmCardPayment(
-                confirmData.client_secret
-            );
-            
-            if (confirmError) {
-                throw new Error(confirmError.message);
-            }
-            
-            // Step 5: Check final status
-            const finalResponse = await fetch(`/api/payments/${paymentId}/3d-secure/`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Token ${token}`
-                }
-            });
-            
-            return await finalResponse.json();
-        } else {
-            // Payment completed without 3D Secure
-            return confirmData;
-        }
+        return await confirmResponse.json();
         
     } catch (error) {
         console.error('Payment failed:', error);
@@ -2117,9 +2094,9 @@ try {
 ```
 
 #### Key Features:
+- **Automatic Confirmation**: Stripe.js handles everything automatically
 - **3D Secure (SCA)**: Automatic OTP verification through user's bank
 - **PKR Currency**: Payments processed in Pakistani Rupees
-- **Manual Confirmation**: Frontend controls the payment flow
 - **Error Handling**: Comprehensive error responses
 - **Security**: Bank-level OTP verification
 
