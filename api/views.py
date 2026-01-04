@@ -589,7 +589,7 @@ class ArtworkViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def create(self, request, *args, **kwargs):
-        """Create artwork with local file upload"""
+        """Create artwork with duplicate detection"""
         # Validate user is artist
         if request.user.user_type != 'artist':
             return Response(
@@ -603,10 +603,23 @@ class ArtworkViewSet(ModelViewSet):
         
         artwork = serializer.save(artist=request.user)
         
-        return Response({
+        # Check for duplicates
+        from .duplicate_detection import check_artwork_duplicates
+        duplicate_result = check_artwork_duplicates(artwork)
+        
+        # Prepare response
+        response_data = {
             'message': 'Artwork uploaded successfully',
-            'artwork': ArtworkSerializer(artwork).data
-        }, status=status.HTTP_201_CREATED)
+            'artwork': ArtworkSerializer(artwork).data,
+            'duplicate_check': duplicate_result
+        }
+        
+        # If duplicates found, include warning
+        if duplicate_result['has_duplicates']:
+            response_data['warning'] = 'Potential duplicate artwork detected!'
+            response_data['duplicate_details'] = duplicate_result['duplicates']
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
     
     def update(self, request, *args, **kwargs):
         """Update artwork"""
@@ -621,14 +634,30 @@ class ArtworkViewSet(ModelViewSet):
             )
         
         # Update fields
+        old_image = instance.image
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         
-        return Response({
+        # Check for duplicates if image was changed
+        duplicate_result = None
+        if 'image' in request.data and old_image != instance.image:
+            from .duplicate_detection import check_artwork_duplicates
+            duplicate_result = check_artwork_duplicates(instance)
+        
+        response_data = {
             'message': 'Artwork updated successfully',
             'artwork': ArtworkSerializer(instance).data
-        })
+        }
+        
+        # Include duplicate check results if image was changed
+        if duplicate_result:
+            response_data['duplicate_check'] = duplicate_result
+            if duplicate_result['has_duplicates']:
+                response_data['warning'] = 'Potential duplicate artwork detected after update!'
+                response_data['duplicate_details'] = duplicate_result['duplicates']
+        
+        return Response(response_data)
     
     def destroy(self, request, *args, **kwargs):
         """Delete artwork"""
@@ -678,6 +707,27 @@ class ArtworkViewSet(ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = ArtworkListSerializer(featured_artworks, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def check_duplicates(self, request, pk=None):
+        """Check for duplicate artworks"""
+        artwork = self.get_object()
+        
+        # Only allow artist to check their own artwork or admin
+        if artwork.artist != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'You can only check duplicates for your own artworks'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from .duplicate_detection import check_artwork_duplicates
+        duplicate_result = check_artwork_duplicates(artwork)
+        
+        return Response({
+            'artwork_id': artwork.id,
+            'artwork_title': artwork.title,
+            **duplicate_result
+        }, status=status.HTTP_200_OK)
     
 
 def create_notification(recipient, notification_type, title, message):

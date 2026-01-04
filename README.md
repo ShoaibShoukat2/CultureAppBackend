@@ -23,33 +23,6 @@
    - Password: `admin123`
    - Email: `admin@artconnect.com`
 
-## 🆕 NEW: AWS S3 Storage & Rekognition Duplicate Detection (Integrated)
-
-### Features
-- ✅ **AWS S3 Storage**: All artworks automatically stored in cloud
-- ✅ **AI Duplicate Detection**: Automatic duplicate checking using AWS Rekognition
-- ✅ **Security**: Prevents plagiarism and copyright infringement
-- ✅ **Seamless Integration**: Works with existing `/api/artworks/` endpoints
-
-### Quick Setup
-1. Install: `pip install boto3`
-2. Configure `.env` with AWS credentials:
-   ```env
-   AWS_ACCESS_KEY_ID=your_key
-   AWS_SECRET_ACCESS_KEY=your_secret
-   AWS_STORAGE_BUCKET_NAME=your_bucket
-   AWS_S3_REGION_NAME=us-east-1
-   ```
-3. Run: `python manage.py migrate`
-4. Test: `python test_aws_connection.py`
-
-### How It Works
-- **Same endpoints** as before: `POST /api/artworks/`, `PUT /api/artworks/{id}/`, etc.
-- **Automatic S3 upload** when creating/updating artworks
-- **Automatic duplicate check** using AWS Rekognition AI
-- **Automatic watermark** generation and S3 storage
-- **No code changes needed** in your frontend!
-
 ---
 
 ## Base URL
@@ -65,7 +38,7 @@ http://localhost:8000/api/
 3. [Two-Factor Authentication (2FA)](#two-factor-authentication-2fa) **🆕 NEW**
 4. [Artist Profiles](#artist-profiles)
 5. [Buyer Profiles](#buyer-profiles)
-6. [Artworks (with S3 & Rekognition)](#artworks)
+6. [Artworks (with Duplicate Detection)](#artworks)
 7. [Jobs/Projects](#jobs-projects)
 8. [Bids](#bids)
 9. [Orders](#orders)
@@ -95,7 +68,7 @@ The ArtConnect platform includes a comprehensive admin backend system that provi
 #### 🎨 Content Moderation
 - **Artwork Approval**: Review and approve/reject uploaded artworks
 - **Featured Content**: Promote high-quality artworks to featured status
-- **AI Duplicate Detection**: Monitor and manage duplicate content detection
+- **Perceptual Hash Duplicate Detection**: Monitor and manage duplicate content detection
 - **Content Analytics**: Track artwork uploads, views, and engagement
 
 #### 💼 Job & Project Oversight
@@ -1091,9 +1064,9 @@ Content-Type: application/json
 
 ---
 
-## 🎨 Artworks (with S3 & Rekognition Integration)
+## 🎨 Artworks (with Perceptual Hash Duplicate Detection)
 
-**🆕 Now with automatic S3 storage and AI duplicate detection!**
+**🆕 Now with automatic duplicate detection using Perceptual Hashing!**
 
 ### 1. List All Artworks
 **Endpoint:** `GET /api/artworks/`
@@ -1162,7 +1135,7 @@ GET /api/artworks/?category=1&artwork_type=digital&min_price=100&max_price=500&i
 
 ---
 
-### 3. Create Artwork (🆕 with S3 & Duplicate Detection)
+### 3. Create Artwork (🆕 with Perceptual Hash Duplicate Detection)
 **Endpoint:** `POST /api/artworks/`
 
 **Headers:**
@@ -1185,7 +1158,7 @@ is_featured: false
 
 **Field Details:**
 - `title`: Required, max 200 characters
-- `description`: Required
+- `description`: Required, max 2000 characters
 - `category_id`: Required, valid category ID
 - `artwork_type`: Required, choices: `"digital"`, `"physical"`, `"mixed"`
 - `price`: Required, decimal (max 2 decimal places)
@@ -1194,10 +1167,11 @@ is_featured: false
 - `is_featured`: Optional, boolean (default: false)
 
 **🆕 What Happens Automatically:**
-1. ✅ Image uploaded to AWS S3 (cloud storage)
-2. ✅ AI checks for duplicate artworks using AWS Rekognition
-3. ✅ Watermark generated and uploaded to S3
-4. ✅ Rekognition labels detected (e.g., "Art", "Painting", "Digital")
+1. ✅ **Image Processing**: Uploaded image is processed and stored
+2. ✅ **Perceptual Hash Calculation**: Three types of hashes calculated (pHash, aHash, dHash)
+3. ✅ **Duplicate Detection**: Compares against other artists' artworks using similarity scoring
+4. ✅ **Watermark Generation**: Professional watermark applied to protect artwork
+5. ✅ **Database Storage**: All metadata and hashes stored for future comparisons
 
 **Success Response (201 Created):**
 ```json
@@ -1207,67 +1181,108 @@ is_featured: false
     "id": 1,
     "artist": {
       "id": 1,
-      "username": "artist_john"
+      "username": "artist_john",
+      "first_name": "John",
+      "last_name": "Doe"
     },
     "title": "Sunset Over Mountains",
-    "description": "A beautiful digital painting...",
+    "description": "A beautiful digital painting capturing the serene beauty of sunset",
     "category": {
       "id": 1,
       "name": "Digital Art"
     },
     "artwork_type": "digital",
     "price": "299.99",
-    "s3_image_url": "https://bucket.s3.amazonaws.com/artworks/1/uuid.jpg",
-    "s3_watermarked_url": "https://bucket.s3.amazonaws.com/artworks/1/watermarked_uuid.jpg",
-    "rekognition_checked": true,
-    "rekognition_labels": [
-      {"name": "Art", "confidence": 99.5},
-      {"name": "Painting", "confidence": 98.2},
-      {"name": "Sunset", "confidence": 95.0}
-    ],
-    "similarity_score": "0.00",
+    "image": "http://localhost:8000/media/artworks/sunset.jpg",
+    "watermarked_image": "http://localhost:8000/media/watermarked_artworks/watermarked_sunset.jpg",
     "is_available": true,
     "is_featured": false,
     "views_count": 0,
     "likes_count": 0,
-    "created_at": "2025-10-12T10:30:00Z"
+    "created_at": "2025-01-04T10:30:00Z",
+    "updated_at": "2025-01-04T10:30:00Z"
   },
   "duplicate_check": {
-    "checked": true,
-    "total_compared": 10,
-    "duplicate_found": false
-  },
-  "rekognition_labels": [
-    {"name": "Art", "confidence": 99.5},
-    {"name": "Painting", "confidence": 98.2}
-  ]
-}
-```
-
-**🚫 Duplicate Detected Response (400 Bad Request):**
-```json
-{
-  "error": "Duplicate artwork detected",
-  "message": "This artwork is too similar to an existing artwork in our system",
-  "duplicate_detected": true,
-  "similarity_score": 92.5,
-  "matched_artwork": {
-    "id": 5,
-    "title": "Similar Artwork",
-    "artist": "john_doe"
+    "has_duplicates": false,
+    "duplicates": [],
+    "message": "No duplicates found"
   }
 }
 ```
 
-**How Duplicate Detection Works:**
-- **Label Detection (60%)**: AI identifies objects/scenes (e.g., "Portrait", "Landscape")
-- **Face Comparison (40%)**: Compares faces in portraits
-- **Combined Score**: If ≥ 85% similar → Rejected as duplicate
-- **Same Artist**: Allowed to upload variations of their own work
+**🚨 Duplicate Detected Response (201 Created with Warning):**
+```json
+{
+  "message": "Artwork uploaded successfully",
+  "warning": "Potential duplicate artwork detected!",
+  "artwork": {
+    "id": 1,
+    "title": "Sunset Over Mountains",
+    "artist": {
+      "id": 1,
+      "username": "artist_john"
+    }
+  },
+  "duplicate_check": {
+    "has_duplicates": true,
+    "duplicates": [
+      {
+        "artwork_id": 5,
+        "title": "Mountain Sunset",
+        "artist": "jane_artist",
+        "similarity_percentage": 87.5,
+        "hash_type": "phash",
+        "image_url": "http://localhost:8000/media/artworks/mountain_sunset.jpg"
+      }
+    ],
+    "message": "Found 1 potential duplicate(s)"
+  },
+  "duplicate_details": [
+    {
+      "artwork_id": 5,
+      "title": "Mountain Sunset", 
+      "artist": "jane_artist",
+      "similarity_percentage": 87.5,
+      "hash_type": "phash",
+      "image_url": "http://localhost:8000/media/artworks/mountain_sunset.jpg"
+    }
+  ]
+}
+```
 
+**🔍 How Perceptual Hash Duplicate Detection Works:**
+
+**1. Hash Calculation:**
+- **pHash (Perceptual Hash)**: Detects structural similarity and layout
+- **aHash (Average Hash)**: Compares average brightness patterns  
+- **dHash (Difference Hash)**: Analyzes gradient changes between pixels
+
+**2. Similarity Scoring:**
+- **Hamming Distance**: Measures bit differences between hashes
+- **Percentage Score**: Converted to 0-100% similarity rating
+- **Best Match**: Uses the highest similarity score from all three hash types
+
+**3. Duplicate Detection Rules:**
+- **Cross-Artist Only**: Only compares artworks between different artists
+- **Same Artist Allowed**: Artists can upload variations of their own work
+- **Similarity Threshold**: Default 10 Hamming distance (≈85% similarity)
+- **Warning System**: Shows warnings but doesn't block uploads
+
+**4. Similarity Levels:**
+- **95%+**: Very High (Likely identical)
+- **85-94%**: High (Very similar) 
+- **75-84%**: Medium (Similar)
+- **65-74%**: Low (Somewhat similar)
+- **<65%**: Very Low (Different)
+
+**5. Technical Implementation:**
+- **Fast Processing**: Perceptual hashing is computationally efficient
+- **Database Indexed**: Hash fields are indexed for quick comparisons
+- **Automatic Checking**: Runs on every artwork upload and update
+- **Manual Check Available**: Artists can manually check their artworkse`: Required, max 200 characters
 ---
 
-### 4. Update Artwork (🆕 with S3 Support)
+### 4. Update Artwork (🆕 with Duplicate Detection)
 **Endpoint:** `PATCH /api/artworks/{id}/` or `PUT /api/artworks/{id}/`
 
 **Headers:**
@@ -1293,17 +1308,73 @@ price: 349.99
 ```
 
 **🆕 What Happens When Updating Image:**
-1. ✅ Old image deleted from S3
-2. ✅ New image uploaded to S3
-3. ✅ Duplicate check runs again
-4. ✅ New watermark generated
-5. ✅ New Rekognition labels detected
+1. ✅ **New Hash Calculation**: Perceptual hashes recalculated for new image
+2. ✅ **Duplicate Check**: Automatic comparison against other artists' artworks
+3. ✅ **Watermark Regeneration**: New watermark applied to updated image
+4. ✅ **Database Update**: Hash fields and duplicate check status updated
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Artwork updated successfully",
+  "artwork": {
+    "id": 1,
+    "title": "Updated Sunset Over Mountains",
+    "price": "349.99",
+    "image": "http://localhost:8000/media/artworks/updated_sunset.jpg",
+    "watermarked_image": "http://localhost:8000/media/watermarked_artworks/watermarked_updated_sunset.jpg",
+    "updated_at": "2025-01-04T15:45:00Z"
+  },
+  "duplicate_check": {
+    "has_duplicates": false,
+    "duplicates": [],
+    "message": "No duplicates found"
+  }
+}
+```
 
 **Note:** Only the artwork owner (artist) can update their artwork.
 
 ---
 
-### 5. Like Artwork
+### 5. Manual Duplicate Check
+**Endpoint:** `POST /api/artworks/{id}/check_duplicates/`
+
+**Headers:**
+```
+Authorization: Token YOUR_ARTIST_TOKEN
+```
+
+**Example:** `POST /api/artworks/1/check_duplicates/`
+
+**Success Response (200 OK):**
+```json
+{
+  "artwork_id": 1,
+  "artwork_title": "Sunset Over Mountains",
+  "has_duplicates": true,
+  "duplicates": [
+    {
+      "artwork_id": 15,
+      "title": "Evening Mountain View",
+      "artist": "sarah_painter",
+      "similarity_percentage": 78.3,
+      "hash_type": "ahash",
+      "image_url": "http://localhost:8000/media/artworks/evening_mountain.jpg"
+    }
+  ],
+  "message": "Found 1 potential duplicate(s)"
+}
+```
+
+**Use Cases:**
+- Artists can check their existing artworks for potential duplicates
+- Useful for verifying uniqueness before featuring artwork
+- Helps artists understand similarity with other works in the platform
+
+---
+
+### 6. Like Artwork
 **Endpoint:** `POST /api/artworks/{id}/like/`
 
 **Headers:**
@@ -2959,9 +3030,15 @@ curl -X POST http://localhost:8000/api/bids/ \
 - `GET /api/categories/` - List all categories
 - `GET /api/categories/{id}/` - Get category details
 
-### 🎨 Artworks (with S3 & AI Duplicate Detection)
+### 🎨 Artworks (with Perceptual Hash Duplicate Detection)
 - `GET /api/artworks/` - List all artworks
-- `POST /api/artworks/` - **🆕 Create artwork (S3 + AI duplicate check)**
+- `POST /api/artworks/` - **🆕 Create artwork (with automatic duplicate detection)**
+- `GET /api/artworks/{id}/` - Get artwork details (increments view count)
+- `PATCH /api/artworks/{id}/` - Update artwork (with duplicate check on image change)
+- `DELETE /api/artworks/{id}/` - Delete artwork (artist only)
+- `POST /api/artworks/{id}/like/` - Like artwork
+- `GET /api/artworks/featured/` - Get featured artworks
+- `POST /api/artworks/{id}/check_duplicates/` - **🆕 Manual duplicate check**
 - `GET /api/artworks/{id}/` - Get artwork details
 - `PUT /api/artworks/{id}/` - **🆕 Update artwork (S3 support)**
 - `PATCH /api/artworks/{id}/` - **🆕 Partial update artwork (S3 support)**
@@ -4202,9 +4279,9 @@ const displayPurchases = (purchasesData) => {
 };
 ```
 
-### 3. **Artwork Upload with S3**
+### 3. **Artwork Upload with Duplicate Detection**
 ```javascript
-// Upload artwork with automatic S3 storage and duplicate detection
+// Upload artwork with automatic perceptual hash duplicate detection
 const uploadArtwork = async (formData) => {
   const response = await fetch('/api/artworks/', {
     method: 'POST',
@@ -4214,13 +4291,43 @@ const uploadArtwork = async (formData) => {
   
   const result = await response.json();
   
-  if (result.duplicate_detected) {
-    alert(`Duplicate detected! Similarity: ${result.similarity_score}%`);
-    return;
+  // Check for duplicate warnings (upload still succeeds)
+  if (result.duplicate_check && result.duplicate_check.has_duplicates) {
+    const duplicates = result.duplicate_details;
+    console.warn('Potential duplicates found:', duplicates);
+    
+    // Show warning to user
+    duplicates.forEach(dup => {
+      console.log(`Similar to "${dup.title}" by ${dup.artist} (${dup.similarity_percentage}% similar)`);
+    });
+    
+    // You can show a modal or notification to the user
+    showDuplicateWarning(duplicates);
   }
   
   console.log('Artwork uploaded successfully:', result.artwork);
-  console.log('AI Labels detected:', result.rekognition_labels);
+  console.log('Duplicate check completed:', result.duplicate_check);
+};
+
+// Manual duplicate check for existing artwork
+const checkDuplicates = async (artworkId) => {
+  const response = await fetch(`/api/artworks/${artworkId}/check_duplicates/`, {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${localStorage.getItem('token')}` }
+  });
+  
+  const result = await response.json();
+  
+  if (result.has_duplicates) {
+    console.log(`Found ${result.duplicates.length} potential duplicates:`);
+    result.duplicates.forEach(dup => {
+      console.log(`- "${dup.title}" by ${dup.artist} (${dup.similarity_percentage}% similar via ${dup.hash_type})`);
+    });
+  } else {
+    console.log('No duplicates found for this artwork');
+  }
+  
+  return result;
 };
 ```
 
@@ -4269,7 +4376,7 @@ const handleApiError = (response) => {
 - **User Authentication** (Register, Login, Profile management, **2FA Support**)
 - **Artist Profiles** (Complete CRUD, reviews, artworks)
 - **Buyer Profiles** (Complete CRUD, **purchases history**)
-- **Artworks** (S3 storage, AI duplicate detection, watermarking)
+- **Artworks** (Perceptual hash duplicate detection, automatic watermarking)
 - **Jobs/Projects** (Complete job posting and bidding system)
 - **Orders & Payments** (Complete e-commerce functionality)
 - **Messages** (Real-time messaging system)
@@ -4295,13 +4402,13 @@ const handleApiError = (response) => {
 - **📊 Real-time Analytics** - Live dashboard with comprehensive platform statistics
 - **💳 Advanced Payment Management** - Admin controls for refunds, releases, and monitoring
 - **👥 Bulk User Operations** - Efficient mass actions for user verification and management
-- **🎨 Content Moderation System** - Artwork approval workflow with AI duplicate detection
+- **🎨 Content Moderation System** - Artwork approval workflow with perceptual hash duplicate detection
 - **📈 Financial Reporting** - Detailed revenue analytics with custom date ranges
 - **🔐 Enhanced Security** - Role-based permissions and comprehensive audit trails
 - **⚡ Performance Optimizations** - Bulk operations and efficient database queries
 - **Buyer Purchases API** - Complete purchase history tracking and analytics
 - **S3 Cloud Storage** - All images stored securely in AWS S3 with CDN delivery
-- **AI Duplicate Detection** - Advanced plagiarism prevention using AWS Rekognition
+- **Perceptual Hash Duplicate Detection** - Advanced plagiarism prevention using pHash/aHash/dHash algorithms
 - **Automatic Watermarking** - Intelligent copyright protection for artist content
 
 ---

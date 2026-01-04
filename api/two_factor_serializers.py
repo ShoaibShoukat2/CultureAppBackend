@@ -16,7 +16,7 @@ class Enable2FASerializer(serializers.Serializer):
     def validate_totp_code(self, value):
         if not value.isdigit():
             raise serializers.ValidationError("TOTP code must be 6 digits")
-        return value
+        return valuea
 
 
 class Disable2FASerializer(serializers.Serializer):

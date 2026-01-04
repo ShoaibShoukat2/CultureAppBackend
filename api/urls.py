@@ -78,6 +78,9 @@ urlpatterns = [
     path('artworks/featured/', 
          ArtworkViewSet.as_view({'get': 'featured'}), 
          name='featured-artworks'),
+    path('artworks/<int:pk>/check-duplicates/', 
+         ArtworkViewSet.as_view({'post': 'check_duplicates'}), 
+         name='check-artwork-duplicates'),
     
     # ===== Job Custom Actions =====
     path('jobs/<int:pk>/bids/', 

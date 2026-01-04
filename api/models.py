@@ -183,6 +183,12 @@ class Artwork(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Perceptual hash fields for duplicate detection
+    phash = models.CharField(max_length=64, blank=True, null=True, help_text="Perceptual hash for duplicate detection", db_index=True)
+    ahash = models.CharField(max_length=64, blank=True, null=True, help_text="Average hash for duplicate detection", db_index=True)
+    dhash = models.CharField(max_length=64, blank=True, null=True, help_text="Difference hash for duplicate detection", db_index=True)
+    duplicate_checked = models.BooleanField(default=False, help_text="Whether artwork was checked for duplicates", db_index=True)
+    
     
     
     
