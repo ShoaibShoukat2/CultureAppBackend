@@ -11,6 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Count, Sum
 from django.utils import timezone
+import os
 from .models import *
 from .serializers import *
 from .permissions import IsOwnerOrReadOnly, IsArtistOrReadOnly, IsBuyerOrReadOnly
@@ -589,7 +590,7 @@ class ArtworkViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def create(self, request, *args, **kwargs):
-        """Create artwork with duplicate detection"""
+        """Create artwork with duplicate detection - blocks duplicates"""
         # Validate user is artist
         if request.user.user_type != 'artist':
             return Response(
@@ -597,7 +598,7 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Create artwork
+        # Create artwork temporarily to check for duplicates
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -605,24 +606,57 @@ class ArtworkViewSet(ModelViewSet):
         
         # Check for duplicates
         from .duplicate_detection import check_artwork_duplicates
+        from .duplicate_config import get_block_threshold, is_duplicate_blocking_enabled
+        
         duplicate_result = check_artwork_duplicates(artwork)
         
-        # Prepare response
+        # Get configuration
+        DUPLICATE_BLOCK_THRESHOLD = get_block_threshold()
+        blocking_enabled = is_duplicate_blocking_enabled()
+        
+        # Check if any duplicates exceed the blocking threshold
+        high_similarity_duplicates = []
+        if duplicate_result['has_duplicates'] and blocking_enabled:
+            for duplicate in duplicate_result['duplicates']:
+                if duplicate['similarity_percentage'] >= DUPLICATE_BLOCK_THRESHOLD:
+                    high_similarity_duplicates.append(duplicate)
+        
+        # If high similarity duplicates found, delete the artwork and return error
+        if high_similarity_duplicates:
+            # Delete the uploaded artwork since it's a duplicate
+            artwork.delete()
+            
+            # Return error response with duplicate details
+            return Response({
+                'error': 'Duplicate artwork detected',
+                'message': f'This artwork is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork. Upload blocked to maintain content originality.',
+                'duplicate_detected': True,
+                'blocked_duplicates': high_similarity_duplicates,
+                'threshold_used': DUPLICATE_BLOCK_THRESHOLD,
+                'similar_to': {
+                    'title': high_similarity_duplicates[0]['title'],
+                    'artist': high_similarity_duplicates[0]['artist'],
+                    'similarity': f"{high_similarity_duplicates[0]['similarity_percentage']:.1f}%"
+                },
+                'help': 'Please upload original artwork or make significant modifications to make it more unique.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # If no high similarity duplicates, allow upload but show warnings for lower similarity
         response_data = {
             'message': 'Artwork uploaded successfully',
             'artwork': ArtworkSerializer(artwork).data,
             'duplicate_check': duplicate_result
         }
         
-        # If duplicates found, include warning
+        # If there are lower similarity duplicates, include warning
         if duplicate_result['has_duplicates']:
-            response_data['warning'] = 'Potential duplicate artwork detected!'
+            response_data['warning'] = 'Some similar artworks found, but not similar enough to block upload.'
             response_data['duplicate_details'] = duplicate_result['duplicates']
         
         return Response(response_data, status=status.HTTP_201_CREATED)
     
     def update(self, request, *args, **kwargs):
-        """Update artwork"""
+        """Update artwork with duplicate detection - blocks duplicates"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
@@ -633,8 +667,11 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Update fields
+        # Store old image and data for rollback if needed
         old_image = instance.image
+        old_image_path = instance.image.path if instance.image else None
+        
+        # Update fields
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -643,7 +680,48 @@ class ArtworkViewSet(ModelViewSet):
         duplicate_result = None
         if 'image' in request.data and old_image != instance.image:
             from .duplicate_detection import check_artwork_duplicates
+            from .duplicate_config import get_block_threshold, is_duplicate_blocking_enabled
+            
             duplicate_result = check_artwork_duplicates(instance)
+            
+            # Get configuration
+            DUPLICATE_BLOCK_THRESHOLD = get_block_threshold()
+            blocking_enabled = is_duplicate_blocking_enabled()
+            
+            # Check if any duplicates exceed the blocking threshold
+            high_similarity_duplicates = []
+            if duplicate_result['has_duplicates'] and blocking_enabled:
+                for duplicate in duplicate_result['duplicates']:
+                    if duplicate['similarity_percentage'] >= DUPLICATE_BLOCK_THRESHOLD:
+                        high_similarity_duplicates.append(duplicate)
+            
+            # If high similarity duplicates found, rollback the update
+            if high_similarity_duplicates:
+                # Rollback: restore old image
+                if old_image_path and os.path.exists(old_image_path):
+                    instance.image = old_image
+                    instance.save()
+                else:
+                    # If old image doesn't exist, we need to remove the new image
+                    if instance.image:
+                        instance.image.delete(save=False)
+                    instance.image = None
+                    instance.save()
+                
+                # Return error response
+                return Response({
+                    'error': 'Duplicate artwork detected',
+                    'message': f'Updated image is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork. Update blocked to maintain content originality.',
+                    'duplicate_detected': True,
+                    'blocked_duplicates': high_similarity_duplicates,
+                    'threshold_used': DUPLICATE_BLOCK_THRESHOLD,
+                    'similar_to': {
+                        'title': high_similarity_duplicates[0]['title'],
+                        'artist': high_similarity_duplicates[0]['artist'],
+                        'similarity': f"{high_similarity_duplicates[0]['similarity_percentage']:.1f}%"
+                    },
+                    'help': 'Please use a more original image or make significant modifications.'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         response_data = {
             'message': 'Artwork updated successfully',
@@ -654,7 +732,7 @@ class ArtworkViewSet(ModelViewSet):
         if duplicate_result:
             response_data['duplicate_check'] = duplicate_result
             if duplicate_result['has_duplicates']:
-                response_data['warning'] = 'Potential duplicate artwork detected after update!'
+                response_data['warning'] = 'Some similar artworks found, but not similar enough to block update.'
                 response_data['duplicate_details'] = duplicate_result['duplicates']
         
         return Response(response_data)

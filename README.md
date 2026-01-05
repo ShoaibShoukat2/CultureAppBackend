@@ -1210,11 +1210,37 @@ is_featured: false
 }
 ```
 
-**🚨 Duplicate Detected Response (201 Created with Warning):**
+**🚨 Duplicate Detected Response (400 Bad Request - Upload Blocked):**
+```json
+{
+  "error": "Duplicate artwork detected",
+  "message": "This artwork is 92.5% similar to existing artwork. Upload blocked to maintain content originality.",
+  "duplicate_detected": true,
+  "blocked_duplicates": [
+    {
+      "artwork_id": 5,
+      "title": "Mountain Sunset",
+      "artist": "jane_artist",
+      "similarity_percentage": 92.5,
+      "hash_type": "phash",
+      "image_url": "http://localhost:8000/media/artworks/mountain_sunset.jpg"
+    }
+  ],
+  "threshold_used": 85.0,
+  "similar_to": {
+    "title": "Mountain Sunset",
+    "artist": "jane_artist", 
+    "similarity": "92.5%"
+  },
+  "help": "Please upload original artwork or make significant modifications to make it more unique."
+}
+```
+
+**⚠️ Low Similarity Warning (201 Created - Upload Allowed):**
 ```json
 {
   "message": "Artwork uploaded successfully",
-  "warning": "Potential duplicate artwork detected!",
+  "warning": "Some similar artworks found, but not similar enough to block upload.",
   "artwork": {
     "id": 1,
     "title": "Sunset Over Mountains",
@@ -1227,24 +1253,24 @@ is_featured: false
     "has_duplicates": true,
     "duplicates": [
       {
-        "artwork_id": 5,
-        "title": "Mountain Sunset",
-        "artist": "jane_artist",
-        "similarity_percentage": 87.5,
-        "hash_type": "phash",
-        "image_url": "http://localhost:8000/media/artworks/mountain_sunset.jpg"
+        "artwork_id": 8,
+        "title": "Evening Hills",
+        "artist": "sarah_painter",
+        "similarity_percentage": 72.3,
+        "hash_type": "ahash",
+        "image_url": "http://localhost:8000/media/artworks/evening_hills.jpg"
       }
     ],
     "message": "Found 1 potential duplicate(s)"
   },
   "duplicate_details": [
     {
-      "artwork_id": 5,
-      "title": "Mountain Sunset", 
-      "artist": "jane_artist",
-      "similarity_percentage": 87.5,
-      "hash_type": "phash",
-      "image_url": "http://localhost:8000/media/artworks/mountain_sunset.jpg"
+      "artwork_id": 8,
+      "title": "Evening Hills",
+      "artist": "sarah_painter",
+      "similarity_percentage": 72.3,
+      "hash_type": "ahash",
+      "image_url": "http://localhost:8000/media/artworks/evening_hills.jpg"
     }
   ]
 }
@@ -1263,22 +1289,30 @@ is_featured: false
 - **Best Match**: Uses the highest similarity score from all three hash types
 
 **3. Duplicate Detection Rules:**
+- **🚫 BLOCKING THRESHOLD**: 85%+ similarity → Upload blocked (400 error)
+- **⚠️ WARNING THRESHOLD**: 70-84% similarity → Upload allowed with warning
+- **✅ ALLOWED**: <70% similarity → Upload allowed without warning
 - **Cross-Artist Only**: Only compares artworks between different artists
-- **Same Artist Allowed**: Artists can upload variations of their own work
-- **Similarity Threshold**: Default 10 Hamming distance (≈85% similarity)
-- **Warning System**: Shows warnings but doesn't block uploads
+- **Same Artist Exception**: Artists can upload variations of their own work
+- **Automatic Processing**: Runs on every artwork upload and update
 
-**4. Similarity Levels:**
-- **95%+**: Very High (Likely identical)
-- **85-94%**: High (Very similar) 
-- **75-84%**: Medium (Similar)
-- **65-74%**: Low (Somewhat similar)
-- **<65%**: Very Low (Different)
+**4. Blocking Behavior:**
+- **High Similarity (≥85%)**: Artwork is **deleted** and upload **rejected**
+- **Medium Similarity (70-84%)**: Artwork is **saved** with **warning**
+- **Low Similarity (<70%)**: Artwork is **saved** without warning
+- **No Duplicates**: Artwork is **saved** normally
 
-**5. Technical Implementation:**
+**5. Error Handling:**
+- **Upload Blocked**: Returns 400 Bad Request with detailed duplicate information
+- **Rollback on Update**: If updating image creates duplicate, reverts to original
+- **Detailed Messages**: Shows which artwork is similar and by how much
+- **Helpful Guidance**: Provides suggestions for making artwork more unique
+
+**6. Technical Implementation:**
 - **Fast Processing**: Perceptual hashing is computationally efficient
 - **Database Indexed**: Hash fields are indexed for quick comparisons
 - **Automatic Checking**: Runs on every artwork upload and update
+- **Configurable Thresholds**: Admins can adjust similarity thresholds
 - **Manual Check Available**: Artists can manually check their artworkse`: Required, max 200 characters
 ---
 
@@ -4279,34 +4313,63 @@ const displayPurchases = (purchasesData) => {
 };
 ```
 
-### 3. **Artwork Upload with Duplicate Detection**
+### 3. **Artwork Upload with Duplicate Detection & Blocking**
 ```javascript
 // Upload artwork with automatic perceptual hash duplicate detection
 const uploadArtwork = async (formData) => {
-  const response = await fetch('/api/artworks/', {
-    method: 'POST',
-    headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
-    body: formData // FormData with image file
-  });
-  
-  const result = await response.json();
-  
-  // Check for duplicate warnings (upload still succeeds)
-  if (result.duplicate_check && result.duplicate_check.has_duplicates) {
-    const duplicates = result.duplicate_details;
-    console.warn('Potential duplicates found:', duplicates);
-    
-    // Show warning to user
-    duplicates.forEach(dup => {
-      console.log(`Similar to "${dup.title}" by ${dup.artist} (${dup.similarity_percentage}% similar)`);
+  try {
+    const response = await fetch('/api/artworks/', {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
+      body: formData // FormData with image file
     });
     
-    // You can show a modal or notification to the user
-    showDuplicateWarning(duplicates);
+    const result = await response.json();
+    
+    // Handle blocked duplicates (400 error)
+    if (response.status === 400 && result.duplicate_detected) {
+      console.error('Upload blocked - duplicate detected!');
+      console.error(`Similarity: ${result.similar_to.similarity} to "${result.similar_to.title}" by ${result.similar_to.artist}`);
+      
+      // Show error to user
+      showDuplicateBlockedError({
+        message: result.message,
+        similarTo: result.similar_to,
+        threshold: result.threshold_used,
+        help: result.help
+      });
+      
+      return { success: false, blocked: true, reason: 'duplicate' };
+    }
+    
+    // Handle successful upload
+    if (response.status === 201) {
+      console.log('Artwork uploaded successfully:', result.artwork);
+      
+      // Check for duplicate warnings (upload succeeded but similarities found)
+      if (result.duplicate_check && result.duplicate_check.has_duplicates) {
+        const duplicates = result.duplicate_details;
+        console.warn('Similar artworks found (but upload allowed):', duplicates);
+        
+        // Show warning to user
+        duplicates.forEach(dup => {
+          console.log(`Similar to "${dup.title}" by ${dup.artist} (${dup.similarity_percentage}% similar)`);
+        });
+        
+        showDuplicateWarning(duplicates);
+      }
+      
+      return { success: true, artwork: result.artwork, warnings: result.duplicate_details || [] };
+    }
+    
+    // Handle other errors
+    console.error('Upload failed:', result);
+    return { success: false, error: result };
+    
+  } catch (error) {
+    console.error('Network error:', error);
+    return { success: false, error: 'Network error' };
   }
-  
-  console.log('Artwork uploaded successfully:', result.artwork);
-  console.log('Duplicate check completed:', result.duplicate_check);
 };
 
 // Manual duplicate check for existing artwork
@@ -4328,6 +4391,43 @@ const checkDuplicates = async (artworkId) => {
   }
   
   return result;
+};
+
+// UI Helper Functions
+const showDuplicateBlockedError = (info) => {
+  // Show modal or notification to user
+  alert(`Upload Blocked!\n\nYour artwork is ${info.similarTo.similarity} similar to "${info.similarTo.title}" by ${info.similarTo.artist}.\n\n${info.help}`);
+};
+
+const showDuplicateWarning = (duplicates) => {
+  // Show warning notification
+  const message = `Similar artworks found:\n${duplicates.map(d => `• ${d.title} (${d.similarity_percentage}% similar)`).join('\n')}`;
+  console.warn(message);
+  // You can show a dismissible notification here
+};
+
+// Example usage
+const handleFileUpload = async (fileInput) => {
+  const formData = new FormData();
+  formData.append('image', fileInput.files[0]);
+  formData.append('title', 'My Artwork');
+  formData.append('description', 'Beautiful artwork');
+  formData.append('category_id', '1');
+  formData.append('artwork_type', 'digital');
+  formData.append('price', '299.99');
+  
+  const result = await uploadArtwork(formData);
+  
+  if (result.success) {
+    console.log('Upload successful!');
+    if (result.warnings.length > 0) {
+      console.log('But some similar artworks were found');
+    }
+  } else if (result.blocked) {
+    console.log('Upload was blocked due to duplicate detection');
+  } else {
+    console.log('Upload failed:', result.error);
+  }
 };
 ```
 
