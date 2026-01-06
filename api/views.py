@@ -628,8 +628,9 @@ class ArtworkViewSet(ModelViewSet):
             
             # Return error response with duplicate details
             return Response({
+                'success': False,
                 'error': 'Duplicate artwork detected',
-                'message': f'This artwork is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork. Upload blocked to maintain content originality.',
+                'message': f'❌ UPLOAD BLOCKED: This artwork is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork.',
                 'duplicate_detected': True,
                 'blocked_duplicates': high_similarity_duplicates,
                 'threshold_used': DUPLICATE_BLOCK_THRESHOLD,
@@ -638,20 +639,40 @@ class ArtworkViewSet(ModelViewSet):
                     'artist': high_similarity_duplicates[0]['artist'],
                     'similarity': f"{high_similarity_duplicates[0]['similarity_percentage']:.1f}%"
                 },
-                'help': 'Please upload original artwork or make significant modifications to make it more unique.'
+                'help': '💡 Please upload original artwork or make significant modifications to make it more unique.',
+                'duplicate_info': f"🔍 Found {len(high_similarity_duplicates)} duplicate(s) above {DUPLICATE_BLOCK_THRESHOLD}% similarity threshold"
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # If no high similarity duplicates, allow upload but show warnings for lower similarity
+        # If no high similarity duplicates, allow upload but show clear duplicate information
         response_data = {
-            'message': 'Artwork uploaded successfully',
+            'success': True,
+            'message': '✅ Artwork uploaded successfully',
             'artwork': ArtworkSerializer(artwork).data,
-            'duplicate_check': duplicate_result
+            'duplicate_check': duplicate_result,
+            'duplicate_detection_status': 'COMPLETED'
         }
         
-        # If there are lower similarity duplicates, include warning
+        # If there are lower similarity duplicates, include clear warning
         if duplicate_result['has_duplicates']:
-            response_data['warning'] = 'Some similar artworks found, but not similar enough to block upload.'
+            response_data['warning'] = '⚠️ SIMILAR ARTWORKS FOUND (but upload allowed)'
             response_data['duplicate_details'] = duplicate_result['duplicates']
+            response_data['duplicate_summary'] = f"🔍 Found {len(duplicate_result['duplicates'])} similar artwork(s) below blocking threshold"
+            
+            # Add detailed similarity info
+            similarity_info = []
+            for dup in duplicate_result['duplicates']:
+                similarity_info.append(f"• '{dup['title']}' by {dup['artist']} - {dup['similarity_percentage']:.1f}% similar")
+            response_data['similarity_details'] = similarity_info
+        else:
+            response_data['duplicate_summary'] = '✅ No similar artworks found - completely original!'
+        
+        # Always include duplicate detection info
+        response_data['duplicate_detection_info'] = {
+            'checked': True,
+            'threshold_for_blocking': DUPLICATE_BLOCK_THRESHOLD,
+            'total_artworks_compared': len(Artwork.objects.exclude(artist=request.user).filter(duplicate_checked=True)),
+            'detection_method': 'Perceptual Hash (pHash + aHash + dHash)'
+        }
         
         return Response(response_data, status=status.HTTP_201_CREATED)
     
