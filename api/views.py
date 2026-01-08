@@ -590,7 +590,7 @@ class ArtworkViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def create(self, request, *args, **kwargs):
-        """Create artwork with duplicate detection - blocks duplicates"""
+        """Create artwork"""
         # Validate user is artist
         if request.user.user_type != 'artist':
             return Response(
@@ -598,86 +598,22 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Create artwork temporarily to check for duplicates
+        # Create artwork
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         artwork = serializer.save(artist=request.user)
         
-        # Check for duplicates
-        from .duplicate_detection import check_artwork_duplicates
-        from .duplicate_config import get_block_threshold, is_duplicate_blocking_enabled
-        
-        duplicate_result = check_artwork_duplicates(artwork)
-        
-        # Get configuration
-        DUPLICATE_BLOCK_THRESHOLD = get_block_threshold()
-        blocking_enabled = is_duplicate_blocking_enabled()
-        
-        # Check if any duplicates exceed the blocking threshold
-        high_similarity_duplicates = []
-        if duplicate_result['has_duplicates'] and blocking_enabled:
-            for duplicate in duplicate_result['duplicates']:
-                if duplicate['similarity_percentage'] >= DUPLICATE_BLOCK_THRESHOLD:
-                    high_similarity_duplicates.append(duplicate)
-        
-        # If high similarity duplicates found, delete the artwork and return error
-        if high_similarity_duplicates:
-            # Delete the uploaded artwork since it's a duplicate
-            artwork.delete()
-            
-            # Return error response with duplicate details
-            return Response({
-                'success': False,
-                'error': 'Duplicate artwork detected',
-                'message': f'❌ UPLOAD BLOCKED: This artwork is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork.',
-                'duplicate_detected': True,
-                'blocked_duplicates': high_similarity_duplicates,
-                'threshold_used': DUPLICATE_BLOCK_THRESHOLD,
-                'similar_to': {
-                    'title': high_similarity_duplicates[0]['title'],
-                    'artist': high_similarity_duplicates[0]['artist'],
-                    'similarity': f"{high_similarity_duplicates[0]['similarity_percentage']:.1f}%"
-                },
-                'help': '💡 Please upload original artwork or make significant modifications to make it more unique.',
-                'duplicate_info': f"🔍 Found {len(high_similarity_duplicates)} duplicate(s) above {DUPLICATE_BLOCK_THRESHOLD}% similarity threshold"
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # If no high similarity duplicates, allow upload but show clear duplicate information
+        # Prepare response
         response_data = {
-            'success': True,
-            'message': '✅ Artwork uploaded successfully',
-            'artwork': ArtworkSerializer(artwork).data,
-            'duplicate_check': duplicate_result,
-            'duplicate_detection_status': 'COMPLETED'
-        }
-        
-        # If there are lower similarity duplicates, include clear warning
-        if duplicate_result['has_duplicates']:
-            response_data['warning'] = '⚠️ SIMILAR ARTWORKS FOUND (but upload allowed)'
-            response_data['duplicate_details'] = duplicate_result['duplicates']
-            response_data['duplicate_summary'] = f"🔍 Found {len(duplicate_result['duplicates'])} similar artwork(s) below blocking threshold"
-            
-            # Add detailed similarity info
-            similarity_info = []
-            for dup in duplicate_result['duplicates']:
-                similarity_info.append(f"• '{dup['title']}' by {dup['artist']} - {dup['similarity_percentage']:.1f}% similar")
-            response_data['similarity_details'] = similarity_info
-        else:
-            response_data['duplicate_summary'] = '✅ No similar artworks found - completely original!'
-        
-        # Always include duplicate detection info
-        response_data['duplicate_detection_info'] = {
-            'checked': True,
-            'threshold_for_blocking': DUPLICATE_BLOCK_THRESHOLD,
-            'total_artworks_compared': len(Artwork.objects.exclude(artist=request.user).filter(duplicate_checked=True)),
-            'detection_method': 'Perceptual Hash (pHash + aHash + dHash)'
+            'message': 'Artwork uploaded successfully',
+            'artwork': ArtworkSerializer(artwork).data
         }
         
         return Response(response_data, status=status.HTTP_201_CREATED)
     
     def update(self, request, *args, **kwargs):
-        """Update artwork with duplicate detection - blocks duplicates"""
+        """Update artwork"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
@@ -688,73 +624,15 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Store old image and data for rollback if needed
-        old_image = instance.image
-        old_image_path = instance.image.path if instance.image else None
-        
         # Update fields
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         
-        # Check for duplicates if image was changed
-        duplicate_result = None
-        if 'image' in request.data and old_image != instance.image:
-            from .duplicate_detection import check_artwork_duplicates
-            from .duplicate_config import get_block_threshold, is_duplicate_blocking_enabled
-            
-            duplicate_result = check_artwork_duplicates(instance)
-            
-            # Get configuration
-            DUPLICATE_BLOCK_THRESHOLD = get_block_threshold()
-            blocking_enabled = is_duplicate_blocking_enabled()
-            
-            # Check if any duplicates exceed the blocking threshold
-            high_similarity_duplicates = []
-            if duplicate_result['has_duplicates'] and blocking_enabled:
-                for duplicate in duplicate_result['duplicates']:
-                    if duplicate['similarity_percentage'] >= DUPLICATE_BLOCK_THRESHOLD:
-                        high_similarity_duplicates.append(duplicate)
-            
-            # If high similarity duplicates found, rollback the update
-            if high_similarity_duplicates:
-                # Rollback: restore old image
-                if old_image_path and os.path.exists(old_image_path):
-                    instance.image = old_image
-                    instance.save()
-                else:
-                    # If old image doesn't exist, we need to remove the new image
-                    if instance.image:
-                        instance.image.delete(save=False)
-                    instance.image = None
-                    instance.save()
-                
-                # Return error response
-                return Response({
-                    'error': 'Duplicate artwork detected',
-                    'message': f'Updated image is {high_similarity_duplicates[0]["similarity_percentage"]:.1f}% similar to existing artwork. Update blocked to maintain content originality.',
-                    'duplicate_detected': True,
-                    'blocked_duplicates': high_similarity_duplicates,
-                    'threshold_used': DUPLICATE_BLOCK_THRESHOLD,
-                    'similar_to': {
-                        'title': high_similarity_duplicates[0]['title'],
-                        'artist': high_similarity_duplicates[0]['artist'],
-                        'similarity': f"{high_similarity_duplicates[0]['similarity_percentage']:.1f}%"
-                    },
-                    'help': 'Please use a more original image or make significant modifications.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
         response_data = {
             'message': 'Artwork updated successfully',
             'artwork': ArtworkSerializer(instance).data
         }
-        
-        # Include duplicate check results if image was changed
-        if duplicate_result:
-            response_data['duplicate_check'] = duplicate_result
-            if duplicate_result['has_duplicates']:
-                response_data['warning'] = 'Some similar artworks found, but not similar enough to block update.'
-                response_data['duplicate_details'] = duplicate_result['duplicates']
         
         return Response(response_data)
     
@@ -807,28 +685,7 @@ class ArtworkViewSet(ModelViewSet):
         serializer = ArtworkListSerializer(featured_artworks, many=True)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'])
-    def check_duplicates(self, request, pk=None):
-        """Check for duplicate artworks"""
-        artwork = self.get_object()
-        
-        # Only allow artist to check their own artwork or admin
-        if artwork.artist != request.user and not request.user.is_staff:
-            return Response(
-                {'error': 'You can only check duplicates for your own artworks'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        from .duplicate_detection import check_artwork_duplicates
-        duplicate_result = check_artwork_duplicates(artwork)
-        
-        return Response({
-            'artwork_id': artwork.id,
-            'artwork_title': artwork.title,
-            **duplicate_result
-        }, status=status.HTTP_200_OK)
     
-
 def create_notification(recipient, notification_type, title, message):
     """Helper function to create notifications"""
     Notification.objects.create(
