@@ -187,28 +187,43 @@ class ArtworkSerializer(serializers.ModelSerializer):
     artist = UserProfileSerializer(read_only=True)
     category = CategorySerializer(read_only=True)
     category_id = serializers.IntegerField(write_only=True, required=False)
+    is_liked = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
         fields = ['id', 'artist', 'title', 'description', 'category', 'category_id',
                  'artwork_type', 'price', 'image', 'watermarked_image', 'is_available',
-                 'is_featured', 'views_count', 'likes_count', 'created_at', 'updated_at']
-        read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image']
+                 'is_featured', 'views_count', 'likes_count', 'is_liked', 'created_at', 'updated_at']
+        read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image', 'is_liked']
+    
+    def get_is_liked(self, obj):
+        """Check if current user has liked this artwork"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.is_liked_by_user(request.user)
+        return False
     
     def create(self, validated_data):
         validated_data['artist'] = self.context['request'].user
         return super().create(validated_data)
-  
-    
+
 
 class ArtworkListSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.username', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
+    is_liked = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
         fields = ['id', 'title', 'artist_name', 'category_name', 'artwork_type',
-                 'price', 'image', 'is_featured', 'views_count', 'likes_count', 'created_at']
+                 'price', 'image', 'is_featured', 'views_count', 'likes_count', 'is_liked', 'created_at']
+    
+    def get_is_liked(self, obj):
+        """Check if current user has liked this artwork"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.is_liked_by_user(request.user)
+        return False
        
        
        

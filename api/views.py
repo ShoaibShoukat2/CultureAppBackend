@@ -667,12 +667,45 @@ class ArtworkViewSet(ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
-        """Like/unlike artwork"""
+        """Like/unlike artwork - each user can like only once"""
         artwork = self.get_object()
-        # Simple like increment (you can implement user-specific likes)
-        artwork.likes_count += 1
-        artwork.save()
-        return Response({'likes_count': artwork.likes_count})
+        
+        # Check if user is authenticated
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required to like artworks'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Toggle like for the user
+        liked, likes_count = artwork.toggle_like(request.user)
+        
+        return Response({
+            'liked': liked,
+            'likes_count': likes_count,
+            'message': 'Artwork liked!' if liked else 'Artwork unliked!'
+        })
+    
+    @action(detail=True, methods=['get'])
+    def likes(self, request, pk=None):
+        """Get users who liked this artwork"""
+        artwork = self.get_object()
+        likes = artwork.user_likes.select_related('user').all()
+        
+        users_data = []
+        for like in likes:
+            users_data.append({
+                'user_id': like.user.id,
+                'username': like.user.username,
+                'first_name': like.user.first_name,
+                'last_name': like.user.last_name,
+                'liked_at': like.created_at
+            })
+        
+        return Response({
+            'total_likes': len(users_data),
+            'users': users_data
+        })
     
     @action(detail=False, methods=['get'])
     def featured(self, request):

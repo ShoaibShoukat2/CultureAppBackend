@@ -295,6 +295,37 @@ class Artwork(models.Model):
         self.views_count += 1
         self.save(update_fields=['views_count'])
     
+    def get_likes_count(self):
+        """Get total number of likes from ArtworkLike model"""
+        return self.user_likes.count()
+    
+    def is_liked_by_user(self, user):
+        """Check if artwork is liked by specific user"""
+        if user.is_authenticated:
+            return self.user_likes.filter(user=user).exists()
+        return False
+    
+    def toggle_like(self, user):
+        """Toggle like for user - returns (liked, likes_count)"""
+        if not user.is_authenticated:
+            return False, self.get_likes_count()
+        
+        like, created = self.user_likes.get_or_create(user=user)
+        
+        if not created:
+            # Like already exists, remove it (unlike)
+            like.delete()
+            liked = False
+        else:
+            # New like created
+            liked = True
+        
+        # Update the likes_count field to keep it in sync
+        self.likes_count = self.get_likes_count()
+        self.save(update_fields=['likes_count'])
+        
+        return liked, self.likes_count
+    
     def __str__(self):
         return f"{self.title} by {self.artist.username}"
 
@@ -731,7 +762,18 @@ class PlatformAnalytics(models.Model):
     
     def __str__(self):
         return f"Analytics for {self.date}"
-    
-    
 
 
+# Like Model for Artwork Likes
+class ArtworkLike(models.Model):
+    """Track user likes for artworks - one like per user per artwork"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='artwork_likes')
+    artwork = models.ForeignKey(Artwork, on_delete=models.CASCADE, related_name='user_likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'artwork']  # Ensures one like per user per artwork
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} likes {self.artwork.title}"
