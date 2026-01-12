@@ -156,6 +156,7 @@ class Category(models.Model):
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from django.core.files.base import ContentFile
+import imagehash
 
 # Artwork Model
 class Artwork(models.Model):
@@ -175,6 +176,9 @@ class Artwork(models.Model):
     # Image storage fields
     image = models.ImageField(upload_to='artworks/')
     watermarked_image = models.ImageField(upload_to='watermarked_artworks/', blank=True, null=True)
+    
+    # Perceptual hash for duplicate detection
+    perceptual_hash = models.CharField(max_length=64, blank=True, null=True, db_index=True)
     
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
@@ -281,9 +285,136 @@ class Artwork(models.Model):
             # for debugging you can log the exception
             print("Watermarking failed:", e)
 
+    def generate_perceptual_hash(self):
+        """
+        Generate perceptual hash for duplicate detection
+        Uses average hash (aHash) which is good for detecting duplicates
+        """
+        if not self.image:
+            return None
+        
+        try:
+            # Open image and generate hash
+            with Image.open(self.image) as img:
+                # Convert to RGB if needed
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Generate perceptual hash using average hash
+                # aHash is good for detecting duplicates and resized images
+                hash_value = imagehash.average_hash(img, hash_size=16)
+                return str(hash_value)
+        except Exception as e:
+            print(f"Error generating perceptual hash: {e}")
+            return None
+
+    def check_for_duplicates(self, similarity_threshold=5):
+        """
+        Check if this artwork is a duplicate of existing artworks
+        Returns list of similar artworks with their similarity scores
+        
+        Args:
+            similarity_threshold: Maximum hamming distance to consider as duplicate (0-64)
+                                Lower values = more strict duplicate detection
+                                5 is a good balance for catching duplicates while avoiding false positives
+        """
+        if not self.perceptual_hash:
+            return []
+        
+        # Get all other artworks with perceptual hashes (exclude current artwork)
+        other_artworks = Artwork.objects.exclude(id=self.id).filter(
+            perceptual_hash__isnull=False,
+            is_available=True
+        )
+        
+        duplicates = []
+        current_hash = imagehash.hex_to_hash(self.perceptual_hash)
+        
+        for artwork in other_artworks:
+            try:
+                other_hash = imagehash.hex_to_hash(artwork.perceptual_hash)
+                # Calculate hamming distance (similarity)
+                distance = current_hash - other_hash
+                
+                if distance <= similarity_threshold:
+                    duplicates.append({
+                        'artwork': artwork,
+                        'similarity_score': distance,
+                        'similarity_percentage': round((64 - distance) / 64 * 100, 2)
+                    })
+            except Exception as e:
+                print(f"Error comparing hashes: {e}")
+                continue
+        
+        # Sort by similarity (lower distance = more similar)
+        duplicates.sort(key=lambda x: x['similarity_score'])
+        return duplicates
+
+    @classmethod
+    def find_duplicates_for_image(cls, image_file, similarity_threshold=5):
+        """
+        Class method to check for duplicates before saving an artwork
+        Used in views to prevent duplicate uploads
+        
+        Args:
+            image_file: Django UploadedFile or file path
+            similarity_threshold: Maximum hamming distance to consider as duplicate
+        
+        Returns:
+            List of duplicate artworks with similarity scores
+        """
+        try:
+            # Generate hash for the uploaded image
+            with Image.open(image_file) as img:
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                new_hash = imagehash.average_hash(img, hash_size=16)
+                new_hash_str = str(new_hash)
+            
+            # Compare with existing artworks
+            existing_artworks = cls.objects.filter(
+                perceptual_hash__isnull=False,
+                is_available=True
+            )
+            
+            duplicates = []
+            
+            for artwork in existing_artworks:
+                try:
+                    existing_hash = imagehash.hex_to_hash(artwork.perceptual_hash)
+                    distance = new_hash - existing_hash
+                    
+                    if distance <= similarity_threshold:
+                        duplicates.append({
+                            'artwork': artwork,
+                            'similarity_score': distance,
+                            'similarity_percentage': round((64 - distance) / 64 * 100, 2),
+                            'artist': artwork.artist.username,
+                            'title': artwork.title,
+                            'upload_date': artwork.created_at
+                        })
+                except Exception as e:
+                    print(f"Error comparing with artwork {artwork.id}: {e}")
+                    continue
+            
+            # Sort by similarity
+            duplicates.sort(key=lambda x: x['similarity_score'])
+            return duplicates
+            
+        except Exception as e:
+            print(f"Error in find_duplicates_for_image: {e}")
+            return []
+
 
     def save(self, *args, **kwargs):
+        # Generate perceptual hash if image is provided and hash doesn't exist
+        if self.image and not self.perceptual_hash:
+            self.perceptual_hash = self.generate_perceptual_hash()
+        
         super().save(*args, **kwargs)
+        
+        # Apply watermark after saving
         if self.image and not self.watermarked_image:
             self.apply_watermark()
             super().save(update_fields=['watermarked_image'])

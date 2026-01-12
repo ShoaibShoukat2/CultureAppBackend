@@ -188,13 +188,16 @@ class ArtworkSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     category_id = serializers.IntegerField(write_only=True, required=False)
     is_liked = serializers.SerializerMethodField()
+    has_duplicates = serializers.SerializerMethodField()
     
     class Meta:
         model = Artwork
         fields = ['id', 'artist', 'title', 'description', 'category', 'category_id',
                  'artwork_type', 'price', 'image', 'watermarked_image', 'is_available',
-                 'is_featured', 'views_count', 'likes_count', 'is_liked', 'created_at', 'updated_at']
-        read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image', 'is_liked']
+                 'is_featured', 'views_count', 'likes_count', 'is_liked', 'has_duplicates',
+                 'created_at', 'updated_at']
+        read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image', 
+                           'is_liked', 'has_duplicates']
     
     def get_is_liked(self, obj):
         """Check if current user has liked this artwork"""
@@ -202,6 +205,13 @@ class ArtworkSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.is_liked_by_user(request.user)
         return False
+    
+    def get_has_duplicates(self, obj):
+        """Check if this artwork has potential duplicates"""
+        if not obj.perceptual_hash:
+            return False
+        duplicates = obj.check_for_duplicates(similarity_threshold=5)
+        return len(duplicates) > 0
     
     def create(self, validated_data):
         validated_data['artist'] = self.context['request'].user

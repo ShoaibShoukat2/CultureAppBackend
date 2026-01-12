@@ -590,7 +590,7 @@ class ArtworkViewSet(ModelViewSet):
         return [IsAuthenticatedOrReadOnly()]
     
     def create(self, request, *args, **kwargs):
-        """Create artwork"""
+        """Create artwork with duplicate detection"""
         # Validate user is artist
         if request.user.user_type != 'artist':
             return Response(
@@ -598,7 +598,39 @@ class ArtworkViewSet(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Create artwork
+        # Check for duplicates before creating artwork
+        image_file = request.FILES.get('image')
+        if image_file:
+            # Check for duplicates with similarity threshold of 5
+            # You can adjust this value: 
+            # 1-3 = Very strict (only exact duplicates)
+            # 4-6 = Strict (recommended for production)
+            # 7-10 = Moderate 
+            # 11+ = Lenient
+            duplicates = Artwork.find_duplicates_for_image(image_file, similarity_threshold=5)
+            
+            if duplicates:
+                # Found potential duplicates - return warning with details
+                duplicate_details = []
+                for dup in duplicates[:3]:  # Show top 3 most similar
+                    duplicate_details.append({
+                        'artwork_id': dup['artwork'].id,
+                        'title': dup['title'],
+                        'artist': dup['artist'],
+                        'similarity_percentage': dup['similarity_percentage'],
+                        'upload_date': dup['upload_date'].strftime('%Y-%m-%d'),
+                        'image_url': dup['artwork'].image.url if dup['artwork'].image else None
+                    })
+                
+                return Response({
+                    'error': 'Duplicate artwork detected',
+                    'message': 'This image appears to be very similar to existing artworks. Please upload original content only.',
+                    'duplicate_count': len(duplicates),
+                    'similar_artworks': duplicate_details,
+                    'action_required': 'Please choose a different image or confirm this is your original work'
+                }, status=status.HTTP_409_CONFLICT)
+        
+        # No duplicates found, proceed with creation
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -717,6 +749,106 @@ class ArtworkViewSet(ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = ArtworkListSerializer(featured_artworks, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def check_duplicate(self, request):
+        """Check if uploaded image is duplicate before saving"""
+        if request.user.user_type != 'artist':
+            return Response(
+                {'error': 'Only artists can check for duplicates'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response(
+                {'error': 'Image file is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check for duplicates
+        similarity_threshold = int(request.data.get('similarity_threshold', 5))
+        duplicates = Artwork.find_duplicates_for_image(image_file, similarity_threshold)
+        
+        if duplicates:
+            duplicate_details = []
+            for dup in duplicates:
+                duplicate_details.append({
+                    'artwork_id': dup['artwork'].id,
+                    'title': dup['title'],
+                    'artist': dup['artist'],
+                    'similarity_percentage': dup['similarity_percentage'],
+                    'similarity_score': dup['similarity_score'],
+                    'upload_date': dup['upload_date'].strftime('%Y-%m-%d %H:%M'),
+                    'image_url': dup['artwork'].image.url if dup['artwork'].image else None
+                })
+            
+            return Response({
+                'is_duplicate': True,
+                'duplicate_count': len(duplicates),
+                'similar_artworks': duplicate_details,
+                'message': f'Found {len(duplicates)} similar artwork(s)',
+                'recommendation': 'Consider uploading original content only'
+            })
+        else:
+            return Response({
+                'is_duplicate': False,
+                'message': 'No similar artworks found. Safe to upload!',
+                'duplicate_count': 0
+            })
+    
+    @action(detail=True, methods=['get'])
+    def find_similar(self, request, pk=None):
+        """Find artworks similar to this one"""
+        artwork = self.get_object()
+        similarity_threshold = int(request.GET.get('threshold', 10))
+        
+        similar_artworks = artwork.check_for_duplicates(similarity_threshold)
+        
+        similar_data = []
+        for similar in similar_artworks:
+            similar_data.append({
+                'artwork': ArtworkListSerializer(similar['artwork']).data,
+                'similarity_percentage': similar['similarity_percentage'],
+                'similarity_score': similar['similarity_score']
+            })
+        
+        return Response({
+            'artwork_id': artwork.id,
+            'artwork_title': artwork.title,
+            'similar_count': len(similar_data),
+            'similar_artworks': similar_data,
+            'threshold_used': similarity_threshold
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def force_upload(self, request):
+        """Force upload artwork even if duplicates are detected (with confirmation)"""
+        if request.user.user_type != 'artist':
+            return Response(
+                {'error': 'Only artists can upload artworks'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if user confirmed they want to upload despite duplicates
+        confirm_upload = request.data.get('confirm_duplicate_upload', False)
+        if not confirm_upload:
+            return Response(
+                {'error': 'You must confirm that you want to upload despite duplicate detection'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create artwork without duplicate checking
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        artwork = serializer.save(artist=request.user)
+        
+        return Response({
+            'message': 'Artwork uploaded successfully (duplicate check bypassed)',
+            'artwork': ArtworkSerializer(artwork).data,
+            'warning': 'This artwork was uploaded despite potential duplicates being detected'
+        }, status=status.HTTP_201_CREATED)
     
     
 def create_notification(recipient, notification_type, title, message):
