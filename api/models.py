@@ -304,8 +304,11 @@ class Artwork(models.Model):
                 # aHash is good for detecting duplicates and resized images
                 hash_value = imagehash.average_hash(img, hash_size=16)
                 return str(hash_value)
-        except Exception as e:
+        except (IOError, OSError, ValueError) as e:
             print(f"Error generating perceptual hash: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error generating perceptual hash: {e}")
             return None
 
     def check_for_duplicates(self, similarity_threshold=5):
