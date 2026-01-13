@@ -609,6 +609,10 @@ class ArtworkViewSet(ModelViewSet):
             # 11+ = Lenient
             duplicates = Artwork.find_duplicates_for_image(image_file, similarity_threshold=5)
             
+            # IMPORTANT: Reset file pointer after duplicate check
+            if hasattr(image_file, 'seek'):
+                image_file.seek(0)
+            
             if duplicates:
                 # Found potential duplicates - return warning with details
                 duplicate_details = []
@@ -1896,14 +1900,25 @@ def dashboard_stats(request):
         
         # Calculate real-time stats instead of relying on stored values
         total_orders = user.buyer_orders.count()
-        total_spent = user.buyer_payments.filter(status='completed').aggregate(
-            total=Sum('amount')
-        )['total'] or 0
+        
+        # Handle case where user has no payments but has orders
+        completed_payments = user.buyer_payments.filter(status='completed')
+        total_spent = completed_payments.aggregate(total=Sum('amount'))['total'] or 0
+        
+        # If no payments but has orders, calculate from order amounts
+        if total_spent == 0 and total_orders > 0:
+            completed_orders = user.buyer_orders.filter(status__in=['delivered', 'completed'])
+            order_total = completed_orders.aggregate(total=Sum('total_amount'))['total'] or 0
+            total_spent = order_total
         
         projects_posted = user.posted_jobs.count()
         active_jobs = user.posted_jobs.filter(status='open').count()
         ongoing_projects = user.posted_jobs.filter(status='in_progress').count()
         pending_payments = user.buyer_payments.filter(status='pending').count()
+        
+        # Add more meaningful stats for buyers
+        pending_orders = user.buyer_orders.filter(status='pending').count()
+        completed_orders = user.buyer_orders.filter(status__in=['delivered', 'completed']).count()
         
         stats = {
             'total_spent': float(total_spent),
@@ -1911,6 +1926,8 @@ def dashboard_stats(request):
             'active_jobs': active_jobs,
             'ongoing_projects': ongoing_projects,
             'total_orders': total_orders,
+            'pending_orders': pending_orders,
+            'completed_orders': completed_orders,
             'pending_payments': pending_payments,
         }
 

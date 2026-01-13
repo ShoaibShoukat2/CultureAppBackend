@@ -211,7 +211,7 @@ class ArtworkSerializer(serializers.ModelSerializer):
                  'is_featured', 'views_count', 'likes_count', 'is_liked', 'has_duplicates',
                  'created_at', 'updated_at']
         read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image', 
-                           'is_liked', 'has_duplicates']
+                           'is_liked', 'has_duplicates', 'is_available']
     
     def validate_image(self, value):
         """Custom image validation with detailed error messages"""
