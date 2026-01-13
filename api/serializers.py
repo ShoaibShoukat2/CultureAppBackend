@@ -104,6 +104,13 @@ class ArtistProfileUpdateSerializer(serializers.ModelSerializer):
             'profile_image',
         ]
 
+    def validate_profile_image(self, value):
+        """Custom profile image validation"""
+        if value:
+            from .image_validators import validate_profile_image
+            return validate_profile_image(value)
+        return value
+
     def update(self, instance, validated_data):
         # Handle nested user data for profile image
         user_data = validated_data.pop('user', {})
@@ -141,6 +148,13 @@ class BuyerProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = BuyerProfile
         fields = ['company_name', 'address', 'profile_image']
+
+    def validate_profile_image(self, value):
+        """Custom profile image validation"""
+        if value:
+            from .image_validators import validate_profile_image
+            return validate_profile_image(value)
+        return value
 
     def update(self, instance, validated_data):
         # Extract nested user data (for profile image)
@@ -198,6 +212,11 @@ class ArtworkSerializer(serializers.ModelSerializer):
                  'created_at', 'updated_at']
         read_only_fields = ['artist', 'views_count', 'likes_count', 'watermarked_image', 
                            'is_liked', 'has_duplicates']
+    
+    def validate_image(self, value):
+        """Custom image validation with detailed error messages"""
+        from .image_validators import validate_artwork_image
+        return validate_artwork_image(value)
     
     def get_is_liked(self, obj):
         """Check if current user has liked this artwork"""

@@ -1221,12 +1221,20 @@ class OrderViewSet(ModelViewSet):
         """Confirm an order"""
         order = self.get_object()
         if order.status == 'pending':
+            old_status = order.status
             order.status = 'confirmed'
             order.save()
             
             # Reduce equipment stock
             for item in order.equipment_items.all():
                 item.equipment.reduce_stock(item.quantity)
+            
+            # Send order status update email
+            try:
+                from .email_service import EmailService
+                EmailService.send_order_status_update(order, old_status, 'confirmed')
+            except Exception as e:
+                print(f"Error sending order confirmation email: {e}")
             
             return Response({'message': 'Order confirmed successfully'})
         return Response({'error': 'Order cannot be confirmed'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1236,10 +1244,57 @@ class OrderViewSet(ModelViewSet):
         """Cancel an order"""
         order = self.get_object()
         if order.status in ['pending', 'confirmed']:
+            old_status = order.status
             order.status = 'cancelled'
             order.save()
+            
+            # Send order status update email
+            try:
+                from .email_service import EmailService
+                EmailService.send_order_status_update(order, old_status, 'cancelled')
+            except Exception as e:
+                print(f"Error sending order cancellation email: {e}")
+            
             return Response({'message': 'Order cancelled successfully'})
         return Response({'error': 'Order cannot be cancelled'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def mark_shipped(self, request, pk=None):
+        """Mark order as shipped"""
+        order = self.get_object()
+        if order.status == 'confirmed':
+            old_status = order.status
+            order.status = 'shipped'
+            order.save()
+            
+            # Send order status update email
+            try:
+                from .email_service import EmailService
+                EmailService.send_order_status_update(order, old_status, 'shipped')
+            except Exception as e:
+                print(f"Error sending order shipped email: {e}")
+            
+            return Response({'message': 'Order marked as shipped successfully'})
+        return Response({'error': 'Order cannot be marked as shipped'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def mark_delivered(self, request, pk=None):
+        """Mark order as delivered/completed"""
+        order = self.get_object()
+        if order.status in ['confirmed', 'shipped']:
+            old_status = order.status
+            order.status = 'delivered'
+            order.save()
+            
+            # Send order status update email
+            try:
+                from .email_service import EmailService
+                EmailService.send_order_status_update(order, old_status, 'delivered')
+            except Exception as e:
+                print(f"Error sending order delivered email: {e}")
+            
+            return Response({'message': 'Order marked as delivered successfully'})
+        return Response({'error': 'Order cannot be marked as delivered'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PaymentViewSet(ModelViewSet):
