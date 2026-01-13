@@ -33,7 +33,7 @@ class EmailService:
             text_message = render_to_string('emails/purchase_confirmation.txt', context)
             
             # Create email
-            subject = f'Order Confirmation #{order.id} - CultureUp'
+            subject = f'🎉 Purchase Successful - Order Confirmation #{order.id} - CultureUp'
             from_email = settings.DEFAULT_FROM_EMAIL
             to_email = [order.buyer.email]
             
@@ -88,11 +88,13 @@ class EmailService:
                 return False
             
             # Create simple payment confirmation email
-            subject = f'Payment Confirmation - PKR{payment.amount} - CultureUp'
+            subject = f'🎉 Purchase Successful - PKR{payment.amount} - CultureUp'
             message = f"""
 Hello {context['user_name']},
 
-Your payment has been processed successfully!
+🎉 PURCHASED SUCCESSFULLY! 🎉
+
+Your payment has been processed successfully and your purchase is confirmed!
 
 Payment Details:
 - Payment ID: {context['payment_id']}
@@ -103,7 +105,10 @@ Payment Details:
 {f"- Order ID: #{context['order_id']}" if context['order_id'] else ""}
 {f"- Job: {context['job_title']}" if context['job_title'] else ""}
 
-Thank you for using CultureUp!
+✅ Your purchase has been completed successfully!
+📦 You will receive further updates about your order/job progress.
+
+Thank you for choosing CultureUp!
 
 Best regards,
 CultureUp Team
@@ -135,11 +140,13 @@ CultureUp Team
         """
         try:
             # Notify buyer (payer)
-            buyer_subject = f'Payment Sent - PKR{payment.amount} - CultureUp'
+            buyer_subject = f'🎉 Purchase Successful - Payment Sent - PKR{payment.amount} - CultureUp'
             buyer_message = f"""
 Hello {payment.payer.get_full_name() or payment.payer.username},
 
-Your payment has been sent successfully!
+🎉 PURCHASED SUCCESSFULLY! 🎉
+
+Your payment has been sent successfully and your purchase is confirmed!
 
 Payment Details:
 - Payment ID: {payment.transaction_id}
@@ -149,9 +156,11 @@ Payment Details:
 - Artist: {payment.payee.get_full_name() or payment.payee.username}
 - Date: {payment.created_at.strftime('%B %d, %Y at %I:%M %p')}
 
-The payment is currently held in escrow and will be released to the artist upon job completion.
+✅ Your purchase has been completed successfully!
+💰 The payment is currently held in escrow and will be released to the artist upon job completion.
+📋 You will receive updates about your job progress.
 
-Thank you for using CultureUp!
+Thank you for choosing CultureUp!
 
 Best regards,
 CultureUp Team

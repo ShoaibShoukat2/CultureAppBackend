@@ -17,13 +17,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎉 Purchase Confirmed!</h1>
-            <p>Thank you for your order</p>
+            <h1>🎉 PURCHASED SUCCESSFULLY! 🎉</h1>
+            <p>Your order has been confirmed and payment completed!</p>
         </div>
         
         <div class="content">
             <h2>Hello {{ buyer_name }},</h2>
-            <p>Your order has been successfully placed! Here are the details:</p>
+            <p><strong>✅ PURCHASE SUCCESSFUL!</strong> Your order has been successfully placed and payment has been processed!</p>
             
             <div class="order-details">
                 <h3>Order Information</h3>
@@ -57,8 +57,10 @@
             </div>
             
             <div class="order-details">
-                <h3>Payment & Shipping</h3>
+                <h3>✅ Purchase Status</h3>
+                <p style="color: #4CAF50; font-weight: bold; font-size: 16px;">PURCHASED SUCCESSFULLY!</p>
                 <p><strong>Total Amount:</strong> <span class="total">PKR{{ total_amount }}</span></p>
+                <p><strong>Payment Status:</strong> <span style="color: #4CAF50;">✅ Completed</span></p>
                 <p><strong>Shipping Address:</strong><br>{{ shipping_address }}</p>
             </div>
             

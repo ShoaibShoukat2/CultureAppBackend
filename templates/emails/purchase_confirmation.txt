@@ -1,9 +1,11 @@
-PURCHASE CONFIRMATION - CultureUp
+🎉 PURCHASED SUCCESSFULLY! - CultureUp
 =====================================
 
 Hello {{ buyer_name }},
 
-Your order has been successfully placed! Here are the details:
+🎉 PURCHASE SUCCESSFUL! 🎉
+
+Your order has been successfully placed and payment has been completed!
 
 ORDER INFORMATION
 -----------------
@@ -30,9 +32,11 @@ Equipment:
 {% endfor %}
 {% endif %}
 
-PAYMENT & SHIPPING
+✅ PURCHASE STATUS
 ------------------
+Status: PURCHASED SUCCESSFULLY!
 Total Amount: PKR{{ total_amount }}
+Payment Status: ✅ Completed
 Shipping Address: {{ shipping_address }}
 
 WHAT'S NEXT?
