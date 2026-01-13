@@ -84,8 +84,18 @@ class EmailService:
                 EmailService._send_job_payment_notification(payment)
                 return True
             else:
-                logger.warning(f"Payment {payment.transaction_id} has no associated order or job")
-                return False
+                # Generic payment without order or job
+                recipient = payment.payer
+                context = {
+                    'user_name': recipient.get_full_name() or recipient.username,
+                    'payment_id': payment.transaction_id,
+                    'amount': payment.amount,
+                    'payment_method': payment.get_payment_method_display(),
+                    'payment_date': payment.created_at.strftime('%B %d, %Y at %I:%M %p'),
+                    'order_id': None,
+                    'job_title': None,
+                    'payment_type': 'Payment'
+                }
             
             # Create simple payment confirmation email
             subject = f'🎉 Purchase Successful - PKR{payment.amount} - CultureUp'
