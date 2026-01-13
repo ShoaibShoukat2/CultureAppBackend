@@ -1868,13 +1868,24 @@ def dashboard_stats(request):
 
     if user.user_type == 'artist':
         artist_profile, _ = ArtistProfile.objects.get_or_create(user=user)
+        
+        # Calculate real-time stats
+        total_projects = user.hired_projects.filter(status='completed').count()
+        total_earnings = user.artist_payments.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+        
+        active_bids = user.my_bids.filter(status='pending').count()
+        ongoing_projects = user.hired_projects.filter(status='in_progress').count()
+        total_artworks = user.artworks.filter(is_available=True).count()
+        
         stats = {
-            'total_projects': artist_profile.total_projects_completed,
-            'total_earnings': artist_profile.total_earnings,
-            'current_rating': artist_profile.rating,
-            'active_bids': user.my_bids.filter(status='pending').count(),
-            'ongoing_projects': user.hired_projects.filter(status='in_progress').count(),
-            'total_artworks': user.artworks.filter(is_available=True).count(),
+            'total_projects': total_projects,
+            'total_earnings': float(total_earnings),
+            'current_rating': float(artist_profile.rating),
+            'active_bids': active_bids,
+            'ongoing_projects': ongoing_projects,
+            'total_artworks': total_artworks,
             'recent_reviews': list(
                 user.reviews.order_by('-created_at')[:5].values('rating', 'comment', 'created_at')
             ),
@@ -1882,13 +1893,25 @@ def dashboard_stats(request):
 
     elif user.user_type == 'buyer':
         buyer_profile, _ = BuyerProfile.objects.get_or_create(user=user)
+        
+        # Calculate real-time stats instead of relying on stored values
+        total_orders = user.buyer_orders.count()
+        total_spent = user.buyer_payments.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+        
+        projects_posted = user.posted_jobs.count()
+        active_jobs = user.posted_jobs.filter(status='open').count()
+        ongoing_projects = user.posted_jobs.filter(status='in_progress').count()
+        pending_payments = user.buyer_payments.filter(status='pending').count()
+        
         stats = {
-            'total_spent': buyer_profile.total_spent,
-            'projects_posted': buyer_profile.projects_posted,
-            'active_jobs': user.posted_jobs.filter(status='open').count(),
-            'ongoing_projects': user.posted_jobs.filter(status='in_progress').count(),
-            'total_orders': user.buyer_orders.count(),
-            'pending_payments': user.buyer_payments.filter(status='pending').count(),
+            'total_spent': float(total_spent),
+            'projects_posted': projects_posted,
+            'active_jobs': active_jobs,
+            'ongoing_projects': ongoing_projects,
+            'total_orders': total_orders,
+            'pending_payments': pending_payments,
         }
 
     elif user.user_type == 'admin':
