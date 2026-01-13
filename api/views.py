@@ -1915,19 +1915,74 @@ def dashboard_stats(request):
         }
 
     elif user.user_type == 'admin':
+        # Admin gets comprehensive system-wide statistics
+        from django.db.models import Sum, Count, Avg
+        
+        # User Statistics
+        total_users = CustomUser.objects.count()
+        total_artists = CustomUser.objects.filter(user_type='artist').count()
+        total_buyers = CustomUser.objects.filter(user_type='buyer').count()
+        
+        # Order Statistics
+        total_orders = Order.objects.count()
+        pending_orders = Order.objects.filter(status='pending').count()
+        completed_orders = Order.objects.filter(status='delivered').count()
+        
+        # Payment Statistics
+        total_payments = Payment.objects.count()
+        completed_payments = Payment.objects.filter(status='completed').count()
+        pending_payments = Payment.objects.filter(status='pending').count()
+        
+        total_revenue = Payment.objects.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+        
+        # Job Statistics
+        total_jobs = Job.objects.count()
+        active_jobs = Job.objects.filter(status='open').count()
+        completed_jobs = Job.objects.filter(status='completed').count()
+        in_progress_jobs = Job.objects.filter(status='in_progress').count()
+        
+        # Recent Activity
+        recent_orders = Order.objects.order_by('-created_at')[:5].values(
+            'id', 'buyer__username', 'total_amount', 'status', 'created_at'
+        )
+        
+        recent_payments = Payment.objects.order_by('-created_at')[:5].values(
+            'transaction_id', 'payer__username', 'amount', 'status', 'created_at'
+        )
+        
+        recent_registrations = CustomUser.objects.order_by('-created_at')[:5].values(
+            'id', 'username', 'email', 'user_type', 'created_at'
+        )
+        
         stats = {
-            'total_users': CustomUser.objects.count(),
-            'total_artists': CustomUser.objects.filter(user_type='artist').count(),
-            'total_buyers': CustomUser.objects.filter(user_type='buyer').count(),
-            'active_jobs': Job.objects.filter(status='open').count(),
-            'completed_jobs': Job.objects.filter(status='completed').count(),
-            'total_revenue': Payment.objects.filter(status='completed').aggregate(
-                total=Sum('amount')
-            )['total'] or 0,
-            'recent_registrations': list(
-                CustomUser.objects.order_by('-created_at')[:10]
-                .values('id', 'username', 'email', 'user_type', 'created_at')
-            ),
+            # User Stats
+            'total_users': total_users,
+            'total_artists': total_artists,
+            'total_buyers': total_buyers,
+            
+            # Order Stats
+            'total_orders': total_orders,
+            'pending_orders': pending_orders,
+            'completed_orders': completed_orders,
+            
+            # Payment Stats
+            'total_payments': total_payments,
+            'completed_payments': completed_payments,
+            'pending_payments': pending_payments,
+            'total_revenue': float(total_revenue),
+            
+            # Job Stats
+            'total_jobs': total_jobs,
+            'active_jobs': active_jobs,
+            'completed_jobs': completed_jobs,
+            'in_progress_jobs': in_progress_jobs,
+            
+            # Recent Activity
+            'recent_orders': list(recent_orders),
+            'recent_payments': list(recent_payments),
+            'recent_registrations': list(recent_registrations),
         }
 
     return Response(stats)
