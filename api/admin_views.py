@@ -342,6 +342,16 @@ class AdminEquipmentManagementViewSet(ModelViewSet):
             return Response({'message': f'Stock updated for "{equipment.name}"'})
         return Response({'error': 'Stock quantity required'}, status=status.HTTP_400_BAD_REQUEST)
 
+    def destroy(self, request, *args, **kwargs):
+        """Delete equipment (admin action)"""
+        equipment = self.get_object()
+        equipment_name = equipment.name
+        equipment.delete()
+        return Response(
+            {'message': f'Equipment "{equipment_name}" deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+
 # ===== ORDER MANAGEMENT =====
 class AdminOrderManagementViewSet(ModelViewSet):
     """
@@ -425,9 +435,12 @@ def admin_dashboard_stats(request):
         'revenue_month': Payment.objects.filter(
             status='completed', created_at__date__gte=month_ago
         ).aggregate(Sum('amount'))['amount__sum'] or 0,
+        'total_payments': Payment.objects.count(),
+        'completed_payments': Payment.objects.filter(status='completed').count(),
         'pending_payments': Payment.objects.filter(status='pending').count(),
         'total_orders': Order.objects.count(),
         'pending_orders': Order.objects.filter(status='pending').count(),
+        'completed_orders': Order.objects.filter(status='delivered').count(),
     }
 
     # Activity stats
