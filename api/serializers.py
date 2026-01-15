@@ -427,6 +427,21 @@ class OrderCreateSerializer(serializers.Serializer):
         artwork_items_data = validated_data.pop('artwork_items', [])
         equipment_items_data = validated_data.pop('equipment_items', [])
         
+        # Validate equipment stock before creating order
+        for item_data in equipment_items_data:
+            equipment = Equipment.objects.get(id=item_data['equipment_id'])
+            quantity = item_data.get('quantity', 1)
+            
+            if not equipment.is_in_stock():
+                raise serializers.ValidationError(
+                    f"Equipment '{equipment.name}' is out of stock"
+                )
+            
+            if equipment.stock_quantity < quantity:
+                raise serializers.ValidationError(
+                    f"Equipment '{equipment.name}' has only {equipment.stock_quantity} items in stock, but you requested {quantity}"
+                )
+        
         # Create order
         order = Order.objects.create(
             buyer=request.user,

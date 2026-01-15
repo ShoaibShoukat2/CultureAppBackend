@@ -415,7 +415,8 @@ def admin_dashboard_stats(request):
         'featured_artworks': Artwork.objects.filter(is_featured=True).count(),
         'pending_artworks': 0,  # No longer using AI review
         'total_jobs': Job.objects.count(),
-        'open_jobs': Job.objects.filter(status='open').count(),
+        'active_jobs': Job.objects.filter(status='open').count(),
+        'in_progress_jobs': Job.objects.filter(status='in_progress').count(),
         'completed_jobs': Job.objects.filter(status='completed').count(),
         'total_categories': Category.objects.count(),
         'active_categories': Category.objects.filter(is_active=True).count(),

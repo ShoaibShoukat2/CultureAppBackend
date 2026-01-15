@@ -1225,6 +1225,14 @@ class OrderViewSet(ModelViewSet):
         """Confirm an order"""
         order = self.get_object()
         if order.status == 'pending':
+            # Validate equipment stock before confirming
+            for item in order.equipment_items.all():
+                equipment = item.equipment
+                if equipment.stock_quantity < item.quantity:
+                    return Response({
+                        'error': f"Equipment '{equipment.name}' has insufficient stock. Available: {equipment.stock_quantity}, Required: {item.quantity}"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
             old_status = order.status
             order.status = 'confirmed'
             order.save()
@@ -1249,6 +1257,14 @@ class OrderViewSet(ModelViewSet):
         order = self.get_object()
         if order.status in ['pending', 'confirmed']:
             old_status = order.status
+            
+            # Restore equipment stock if order was confirmed
+            if old_status == 'confirmed':
+                for item in order.equipment_items.all():
+                    equipment = item.equipment
+                    equipment.stock_quantity += item.quantity
+                    equipment.save()
+            
             order.status = 'cancelled'
             order.save()
             
