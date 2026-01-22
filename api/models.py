@@ -582,12 +582,22 @@ class Equipment(models.Model):
         return self.stock_quantity > 0
     
     def reduce_stock(self, quantity):
-        """Reduce stock quantity"""
+        """Reduce stock quantity with better error handling"""
         if self.stock_quantity >= quantity:
             self.stock_quantity -= quantity
-            self.save()
+            if self.stock_quantity == 0:
+                self.is_available = False
+            self.save(update_fields=['stock_quantity', 'is_available'])
             return True
         return False
+    
+    def restore_stock(self, quantity):
+        """Restore stock quantity"""
+        self.stock_quantity += quantity
+        if self.stock_quantity > 0:
+            self.is_available = True
+        self.save(update_fields=['stock_quantity', 'is_available'])
+        return True
     
     def __str__(self):
         return f"{self.name} - PKR{self.price}"

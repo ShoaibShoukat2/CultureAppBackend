@@ -94,6 +94,8 @@ class ArtworkFilter(filters.FilterSet):
         )
 
 
+
+
 class JobFilter(filters.FilterSet):
     """
     Custom filter for Job model with budget and deadline filtering

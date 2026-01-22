@@ -1338,6 +1338,45 @@ class PaymentViewSet(ModelViewSet):
         if self.action == 'create':
             return PaymentCreateSerializer
         return PaymentSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create payment and handle stock reduction for order payments"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Check if payment is for an order with equipment
+        order_id = request.data.get('order')
+        if order_id:
+            try:
+                order = Order.objects.get(id=order_id, buyer=request.user)
+                
+                # Check stock availability before creating payment
+                for item in order.equipment_items.all():
+                    if item.equipment.stock_quantity < item.quantity:
+                        return Response({
+                            'error': f"Equipment '{item.equipment.name}' has insufficient stock. Available: {item.equipment.stock_quantity}, Required: {item.quantity}"
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Create payment
+                payment = serializer.save()
+                
+                # If payment is completed, reduce stock immediately
+                if payment.status == 'completed':
+                    for item in order.equipment_items.all():
+                        item.equipment.reduce_stock(item.quantity)
+                        
+                    # Update order status
+                    order.status = 'confirmed'
+                    order.save()
+                    
+            except Order.DoesNotExist:
+                return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            # Regular payment creation (for jobs)
+            payment = serializer.save()
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
@@ -1397,6 +1436,17 @@ class PaymentViewSet(ModelViewSet):
                 # Payment successful
                 payment.status = 'completed'
                 payment.save()
+                
+                # Reduce stock if payment is for an order
+                if payment.order:
+                    for item in payment.order.equipment_items.all():
+                        if not item.equipment.reduce_stock(item.quantity):
+                            # Log error but don't fail payment
+                            print(f"Warning: Could not reduce stock for {item.equipment.name}")
+                    
+                    # Update order status
+                    payment.order.status = 'confirmed'
+                    payment.order.save()
                 
                 return Response({
                     'success': True,

@@ -60,7 +60,7 @@ def send_order_status_update_email(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Payment)
 def send_payment_confirmation_email(sender, instance, created, **kwargs):
     """
-    Send confirmation email when a payment is completed
+    Send confirmation email when a payment is completed and handle stock reduction
     """
     if created or (instance.status == 'completed' and not hasattr(instance, '_email_sent')):
         try:
@@ -71,6 +71,36 @@ def send_payment_confirmation_email(sender, instance, created, **kwargs):
             
         except Exception as e:
             logger.error(f"Error in payment confirmation email signal for payment {instance.transaction_id}: {str(e)}")
+
+@receiver(post_save, sender=Payment)
+def handle_payment_stock_reduction(sender, instance, created, **kwargs):
+    """Handle stock reduction when payment status changes to completed"""
+    if not created and instance.status == 'completed' and instance.order:
+        try:
+            # Get the previous state to check if status just changed
+            if hasattr(instance, '_old_status') and instance._old_status != 'completed':
+                # Payment just became completed, reduce stock
+                for item in instance.order.equipment_items.all():
+                    if not item.equipment.reduce_stock(item.quantity):
+                        logger.error(f"Failed to reduce stock for {item.equipment.name}")
+                
+                # Update order status
+                instance.order.status = 'confirmed'
+                instance.order.save()
+                logger.info(f"Stock reduced for payment {instance.transaction_id}")
+                
+        except Exception as e:
+            logger.error(f"Error in stock reduction for payment {instance.transaction_id}: {str(e)}")
+
+@receiver(pre_save, sender=Payment)
+def track_payment_status_change(sender, instance, **kwargs):
+    """Track payment status changes"""
+    if instance.pk:  # Only for existing payments
+        try:
+            old_payment = Payment.objects.get(pk=instance.pk)
+            instance._old_status = old_payment.status
+        except Payment.DoesNotExist:
+            pass
 
 @receiver(post_save, sender=ArtworkOrderItem)
 def notify_artist_of_artwork_sale(sender, instance, created, **kwargs):

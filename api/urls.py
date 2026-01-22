@@ -68,8 +68,6 @@ urlpatterns = [
          name='buyer-purchases'),
 
     
-
-
     
     # ===== Artwork Custom Actions =====
     path('artworks/<int:pk>/like/', 
